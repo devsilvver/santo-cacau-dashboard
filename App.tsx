@@ -11,8 +11,8 @@ import {
   AlertTriangle 
 } from 'lucide-react';
 
-// Endereço da API (Local)
-const API_URL = 'http://localhost:3000/api/products';
+// --- VINCULAÇÃO COM API ONLINE ---
+const API_URL = 'https://api-celeiro-da-cachaca.onrender.com/api/products';
 
 // Interface igual à do Banco de Dados
 interface Product {
@@ -58,7 +58,7 @@ export default function App() {
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (error) {
-      alert('Erro ao conectar com a API. Verifique se o servidor está rodando na porta 3000.');
+      alert('Erro ao conectar com a API Online. Verifique se o Render está ativo.');
     } finally {
       setLoading(false);
     }
@@ -141,6 +141,7 @@ export default function App() {
     };
 
     const method = editingId ? 'PUT' : 'POST';
+    // Ajuste aqui para usar a URL base correta no update
     const url = editingId ? `${API_URL}/${editingId}` : API_URL;
 
     try {
@@ -154,7 +155,7 @@ export default function App() {
         setView('LIST');
         loadProducts();
       } else {
-        alert('Erro ao salvar. Verifique o console da API.');
+        alert('Erro ao salvar.');
       }
     } catch (err) {
       console.error(err);
@@ -173,9 +174,8 @@ export default function App() {
       {/* Sidebar Lateral */}
       <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-10">
         
-        {/* LOGO E TÍTULO - Alteração Aqui */}
+        {/* LOGO E TÍTULO */}
         <div className="p-8 flex flex-col items-center border-b border-slate-800">
-          {/* Container claro atrás da logo para dar contraste */}
           <div className="bg-amber-50 p-3 rounded-xl mb-4 shadow-lg shadow-yellow-500/20">
             <img 
               src="https://i.imgur.com/Q3oTWj1.png" 
@@ -194,7 +194,7 @@ export default function App() {
           </button>
         </nav>
         <div className="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
-          v2.7 - Correção de Contraste
+          v3.0 - Conectado Online
         </div>
       </aside>
 
@@ -262,7 +262,7 @@ export default function App() {
                       </td>
                       <td className="px-6 py-3 font-bold text-green-600">R$ {Number(p.price).toFixed(2)}</td>
                       <td className="px-6 py-3 text-right">
-                        <div className="flex justify-end gap-2 transition-opacity">
+                        <div className="flex justify-end gap-2">
                           <button onClick={() => handleEdit(p)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Editar"><Edit size={18} /></button>
                           <button onClick={() => reqDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Excluir"><Trash2 size={18} /></button>
                         </div>
@@ -285,7 +285,6 @@ export default function App() {
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
               <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
                 <h2 className="text-xl font-bold">{editingId ? 'Editar Produto' : 'Cadastrar Novo Produto'}</h2>
-                {/* Adicionei um fundo claro na logo do formulário também para consistência */}
                 <div className="bg-amber-50 p-1 rounded-lg">
                   <img src="https://i.imgur.com/Q3oTWj1.png" className="h-8 object-contain" />
                 </div>
@@ -312,7 +311,7 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* Categoria (Select Obrigatório - ESTILO UNIFICADO) */}
+                  {/* Categoria (Select Obrigatório) */}
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Categoria (Obrigatório)</label>
                     <select required className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none bg-blue-50/30" 
