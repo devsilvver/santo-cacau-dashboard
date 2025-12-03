@@ -61,25 +61,26 @@ export default function App() {
 
   // --- FUNÇÕES DE CARREGAMENTO (INTEGRAÇÃO API) ---
   
-  const loadProducts = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/products`);
-      const data = await res.json();
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (e) { console.error("Erro ao carregar produtos:", e); }
-    setLoading(false);
-  };
-
   const loadOrders = async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`);
-      if (res.status === 403) throw new Error("IP Bloqueado");
+      
+      // Se for erro 403, lê a mensagem do servidor para saber qual IP foi bloqueado
+      if (res.status === 403) {
+        const errorData = await res.json();
+        alert(`ACESSO NEGADO:\n${errorData.error}\n\nAdicione este IP no banco de dados.`);
+        throw new Error("IP Bloqueado");
+      }
+
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch (e) { 
-      alert('ACESSO NEGADO: Seu IP não está autorizado a ver as vendas.'); 
+      console.error(e);
+      // Se já demos o alert acima, não precisa de outro aqui
+      if (e.message !== "IP Bloqueado") {
+        alert('Erro ao carregar vendas.');
+      }
       setOrders([]);
     }
     setLoading(false);
@@ -89,11 +90,19 @@ export default function App() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/allowed-ips`);
-      if (res.status === 403) throw new Error("IP Bloqueado");
+      
+      if (res.status === 403) {
+        const errorData = await res.json();
+        alert(`ACESSO NEGADO:\n${errorData.error}\n\nAdicione este IP no banco de dados.`);
+        throw new Error("IP Bloqueado");
+      }
+
       const data = await res.json();
       setIps(Array.isArray(data) ? data : []);
     } catch (e) { 
-      alert('ACESSO NEGADO: Seu IP não está autorizado a gerenciar segurança.'); 
+      if (e.message !== "IP Bloqueado") {
+        alert('Erro ao carregar lista de IPs.'); 
+      }
       setIps([]);
     }
     setLoading(false);
