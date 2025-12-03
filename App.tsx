@@ -15,9 +15,9 @@ import {
   Mail,
   User,
   Menu,
-  LogOut,
   Lock,
-  Loader2
+  Loader2,
+  Github
 } from 'lucide-react';
 
 // URL da API no Render
@@ -41,8 +41,8 @@ interface AllowedIp {
 
 export default function App() {
   // --- ESTADOS DE CONTROLE DE ACESSO ---
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Carregando inicial
-  const [isAuthorized, setIsAuthorized] = useState(false);    // Status da permissão
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   // --- ESTADOS NORMAIS ---
   const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY'>('PRODUCTS');
@@ -65,36 +65,29 @@ export default function App() {
     open: false, type: null, id: null
   });
 
-  // --- VERIFICAÇÃO INICIAL DE SEGURANÇA ---
+  // --- VERIFICAÇÃO INICIAL ---
   useEffect(() => {
     const verifyAccess = async () => {
       try {
-        // Tenta acessar uma rota protegida apenas para testar o IP
-        // Usamos /api/allowed-ips que exige autenticação de IP no backend
         const res = await fetch(`${API_URL}/api/allowed-ips`);
-        
         if (res.status === 403) {
-          setIsAuthorized(false); // Bloqueado
+          setIsAuthorized(false);
         } else if (res.ok) {
-          setIsAuthorized(true);  // Permitido
-          loadProducts();         // Só carrega produtos se permitido
+          setIsAuthorized(true);
+          loadProducts();
         } else {
-          // Se der outro erro (ex: 500), assume bloqueado por segurança ou mostra erro genérico
           setIsAuthorized(false);
         }
       } catch (error) {
-        console.error("Erro de conexão na verificação:", error);
         setIsAuthorized(false);
       } finally {
-        setIsCheckingAuth(false); // Terminou a verificação
+        setIsCheckingAuth(false);
       }
     };
-
     verifyAccess();
   }, []);
 
-  // --- CARREGAMENTO DE DADOS (Só chamados se autorizado) ---
-  
+  // --- CARREGAMENTO DE DADOS ---
   const loadProducts = async () => {
     setLoading(true);
     try {
@@ -111,7 +104,7 @@ export default function App() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`);
-      if (res.status === 403) { setIsAuthorized(false); return; } // Segurança extra
+      if (res.status === 403) { setIsAuthorized(false); return; }
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch (e) { console.error(e); }
@@ -122,24 +115,21 @@ export default function App() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/allowed-ips`);
-      if (res.status === 403) { setIsAuthorized(false); return; } // Segurança extra
+      if (res.status === 403) { setIsAuthorized(false); return; }
       const data = await res.json();
       setIps(Array.isArray(data) ? data : []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  // Carrega dados ao mudar a aba (apenas se já estiver autorizado)
   useEffect(() => {
     if (!isAuthorized || isCheckingAuth) return;
-    
     if (view === 'PRODUCTS') loadProducts();
     if (view === 'SALES') loadOrders();
     if (view === 'SECURITY') loadIps();
   }, [view, isAuthorized]);
 
   // --- HANDLERS ---
-
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = { ...prodForm, price: parseFloat(prodForm.price), abv: parseFloat(prodForm.abv) };
@@ -229,19 +219,17 @@ export default function App() {
   };
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
 
-  // --- RENDERIZAÇÃO CONDICIONAL ---
+  // --- RENDERIZAÇÃO ---
 
-  // 1. TELA DE CARREGAMENTO (Verificando Permissão)
   if (isCheckingAuth) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
         <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Verificando credenciais de segurança...</p>
+        <p className="text-slate-500 font-medium animate-pulse">Verificando credenciais...</p>
       </div>
     );
   }
 
-  // 2. TELA DE ACESSO NEGADO (Se IP não estiver na lista)
   if (!isAuthorized) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-slate-100 p-4">
@@ -251,18 +239,17 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Acesso Restrito</h1>
           <p className="text-slate-500 mb-8">
-            Você não tem permissão para acessar este painel administrativo. 
-            Esta área é exclusiva para dispositivos autorizados.
+            Você não tem permissão para acessar este painel. 
+            Esta área é exclusiva para IPs autorizados.
           </p>
           <div className="border-t border-slate-100 pt-6">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Celeiro da Cachaça &copy; 2025</p>
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">&copy; 2025 Celeiro da Cachaça</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // 3. TELA PRINCIPAL DO DASHBOARD (Acesso Permitido)
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
@@ -303,10 +290,22 @@ export default function App() {
           </button>
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
-            <button className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-colors text-sm font-medium">
-                <LogOut size={18} /> Sair do Painel
-            </button>
+        {/* RODAPÉ COM CRÉDITOS */}
+        <div className="p-6 border-t border-slate-800 bg-slate-950/30 text-center">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">
+              &copy; 2025 Celeiro da Cachaça
+            </p>
+            <p className="text-xs text-slate-400 flex flex-col items-center gap-1">
+              <span>Desenvolvido por</span>
+              <a 
+                href="https://github.com/devsilvver" 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-yellow-500 hover:text-yellow-400 font-bold transition-colors flex items-center gap-1.5 bg-slate-800/50 px-3 py-1.5 rounded-full hover:bg-slate-800"
+              >
+                <Github size={14} /> Guilherme Silvestrini
+              </a>
+            </p>
         </div>
       </aside>
 
@@ -360,7 +359,7 @@ export default function App() {
                         </td>
                         <td className="px-6 py-3 font-bold text-green-600">{formatMoney(p.price)}</td>
                         <td className="px-6 py-3 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end gap-2">
                             <button onClick={() => handleEditProd(p)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit size={18}/></button>
                             <button onClick={() => setDeleteModal({open:true, type:'PROD', id: p.id})} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><Trash2 size={18}/></button>
                           </div>
