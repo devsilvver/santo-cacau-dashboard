@@ -15,7 +15,9 @@ import {
   Mail,
   User,
   Menu,
-  LogOut
+  LogOut,
+  Lock,
+  Loader2
 } from 'lucide-react';
 
 // URL da API no Render
@@ -38,7 +40,11 @@ interface AllowedIp {
 }
 
 export default function App() {
-  // --- ESTADOS ---
+  // --- ESTADOS DE CONTROLE DE ACESSO ---
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Carregando inicial
+  const [isAuthorized, setIsAuthorized] = useState(false);    // Status da permissão
+
+  // --- ESTADOS NORMAIS ---
   const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY'>('PRODUCTS');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -59,15 +65,44 @@ export default function App() {
     open: false, type: null, id: null
   });
 
-  // --- CARREGAMENTO ---
+  // --- VERIFICAÇÃO INICIAL DE SEGURANÇA ---
+  useEffect(() => {
+    const verifyAccess = async () => {
+      try {
+        // Tenta acessar uma rota protegida apenas para testar o IP
+        // Usamos /api/allowed-ips que exige autenticação de IP no backend
+        const res = await fetch(`${API_URL}/api/allowed-ips`);
+        
+        if (res.status === 403) {
+          setIsAuthorized(false); // Bloqueado
+        } else if (res.ok) {
+          setIsAuthorized(true);  // Permitido
+          loadProducts();         // Só carrega produtos se permitido
+        } else {
+          // Se der outro erro (ex: 500), assume bloqueado por segurança ou mostra erro genérico
+          setIsAuthorized(false);
+        }
+      } catch (error) {
+        console.error("Erro de conexão na verificação:", error);
+        setIsAuthorized(false);
+      } finally {
+        setIsCheckingAuth(false); // Terminou a verificação
+      }
+    };
+
+    verifyAccess();
+  }, []);
+
+  // --- CARREGAMENTO DE DADOS (Só chamados se autorizado) ---
   
   const loadProducts = async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/products`);
-      if (!res.ok) throw new Error("Falha ao buscar produtos");
-      const data = await res.json();
-      setProducts(Array.isArray(data) ? data : []);
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(Array.isArray(data) ? data : []);
+      }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -76,18 +111,10 @@ export default function App() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`);
-      if (res.status === 403) {
-        const errorData = await res.json();
-        alert(`ACESSO NEGADO:\n${errorData.error || 'IP Bloqueado'}`);
-        setOrders([]); 
-        return; 
-      }
+      if (res.status === 403) { setIsAuthorized(false); return; } // Segurança extra
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
-    } catch (e: any) { 
-      console.error(e);
-      setOrders([]);
-    }
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
@@ -95,26 +122,21 @@ export default function App() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/allowed-ips`);
-      if (res.status === 403) {
-        const errorData = await res.json();
-        alert(`ACESSO NEGADO:\n${errorData.error || 'IP Bloqueado'}`);
-        setIps([]);
-        return;
-      }
+      if (res.status === 403) { setIsAuthorized(false); return; } // Segurança extra
       const data = await res.json();
       setIps(Array.isArray(data) ? data : []);
-    } catch (e: any) { 
-      console.error(e);
-      setIps([]);
-    }
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
+  // Carrega dados ao mudar a aba (apenas se já estiver autorizado)
   useEffect(() => {
+    if (!isAuthorized || isCheckingAuth) return;
+    
     if (view === 'PRODUCTS') loadProducts();
     if (view === 'SALES') loadOrders();
     if (view === 'SECURITY') loadIps();
-  }, [view]);
+  }, [view, isAuthorized]);
 
   // --- HANDLERS ---
 
@@ -130,7 +152,7 @@ export default function App() {
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(payload) 
       });
-      if (res.status === 403) { alert("IP Bloqueado: Você não pode editar."); return; }
+      if (res.status === 403) { setIsAuthorized(false); return; }
       if (res.ok) { setView('PRODUCTS'); loadProducts(); }
       else { alert('Erro ao salvar.'); }
     } catch (e) { alert('Erro de conexão.'); }
@@ -163,7 +185,7 @@ export default function App() {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc })
       });
-      if (res.status === 403) { alert("IP Bloqueado: Você não pode adicionar IPs."); return; }
+      if (res.status === 403) { setIsAuthorized(false); return; }
       setIpForm({ ip: '', desc: '' });
       loadIps();
     } catch (e) { alert('Erro ao salvar IP.'); }
@@ -177,7 +199,7 @@ export default function App() {
         : `${API_URL}/api/allowed-ips/${deleteModal.id}`;
 
       const res = await fetch(url, { method: 'DELETE' });
-      if (res.status === 403) { alert("IP Bloqueado."); return; }
+      if (res.status === 403) { setIsAuthorized(false); return; }
       
       if (deleteModal.type === 'PROD') loadProducts();
       else loadIps();
@@ -207,6 +229,40 @@ export default function App() {
   };
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
 
+  // --- RENDERIZAÇÃO CONDICIONAL ---
+
+  // 1. TELA DE CARREGAMENTO (Verificando Permissão)
+  if (isCheckingAuth) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
+        <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
+        <p className="text-slate-500 font-medium animate-pulse">Verificando credenciais de segurança...</p>
+      </div>
+    );
+  }
+
+  // 2. TELA DE ACESSO NEGADO (Se IP não estiver na lista)
+  if (!isAuthorized) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-slate-100 p-4">
+        <div className="bg-white max-w-md w-full p-8 rounded-2xl shadow-xl border border-slate-200 text-center">
+          <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-10 h-10 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800 mb-2">Acesso Restrito</h1>
+          <p className="text-slate-500 mb-8">
+            Você não tem permissão para acessar este painel administrativo. 
+            Esta área é exclusiva para dispositivos autorizados.
+          </p>
+          <div className="border-t border-slate-100 pt-6">
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Celeiro da Cachaça &copy; 2025</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. TELA PRINCIPAL DO DASHBOARD (Acesso Permitido)
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
@@ -325,7 +381,7 @@ export default function App() {
             <p className="text-slate-500 mb-8">Acompanhe os pedidos realizados em tempo real.</p>
             
             <div className="grid gap-4">
-              {loading ? <p className="text-center py-12 text-slate-400">Carregando dados...</p> : orders.map(o => (
+              {loading ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 text-yellow-500 animate-spin"/></div> : orders.map(o => (
                 <div key={o.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between gap-6 hover:shadow-md transition-shadow group">
                   <div className="flex-1 space-y-4">
                     <div className="flex flex-wrap items-center gap-3 justify-between md:justify-start">
