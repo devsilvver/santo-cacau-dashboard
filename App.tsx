@@ -43,7 +43,7 @@ interface Order {
   id: number; status: string; total_amount: string; created_at: string;
   shipping_address: string; mp_payment_id: string;
   full_name: string; email: string; phone: string;
-  items: OrderItem[]; // Lista de produtos dentro do pedido
+  items: OrderItem[]; 
 }
 
 interface AllowedIp {
@@ -125,7 +125,6 @@ export default function App() {
   };
 
   const loadOrders = async () => {
-    // Não ativamos setLoading aqui para evitar "piscar" a tela durante o polling
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`);
       
@@ -136,21 +135,36 @@ export default function App() {
       
       const data = await res.json();
       
-      // Lógica para tratar pedidos "Abandonados" no Front (Visualmente)
-      const treatedData = Array.isArray(data) ? data.map((o: Order) => {
+      // --- CORREÇÃO DA TELA BRANCA ---
+      // Converte os itens (que podem vir como string JSON do MySQL) para array real
+      const treatedData = Array.isArray(data) ? data.map((o: any) => {
           const orderDate = new Date(o.created_at).getTime();
           const now = new Date().getTime();
           const hoursDiff = (now - orderDate) / (1000 * 3600);
           
+          let statusFinal = o.status;
           // Se pendente há mais de 24h, mostramos como Cancelado
           if (o.status === 'pending' && hoursDiff > 24) {
-              return { ...o, status: 'cancelled' };
+              statusFinal = 'cancelled';
           }
-          return o;
+
+          // Parse seguro dos itens
+          let parsedItems = [];
+          try {
+            // Se for string, converte. Se já for array, usa direto.
+            parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items;
+          } catch (err) {
+            parsedItems = [];
+          }
+
+          // Garante que é um array, mesmo se vier null
+          if (!Array.isArray(parsedItems)) parsedItems = [];
+
+          return { ...o, status: statusFinal, items: parsedItems };
       }) : [];
 
       setOrders(treatedData);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Erro ao carregar vendas:", e); }
   };
 
   const loadIps = async () => {
@@ -242,7 +256,7 @@ export default function App() {
   };
 
   // --- HELPERS DE FORMATAÇÃO E ESTILO ---
-  const formatMoney = (val: string | number) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatMoney = (val: string | number) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatDate = (date: string) => {
     try {
       return new Date(date).toLocaleDateString('pt-BR') + ' às ' + new Date(date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
@@ -416,7 +430,7 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: VENDAS (APRIMORADA) */}
+        {/* VIEW: VENDAS (APRIMORADA E CORRIGIDA) */}
         {view === 'SALES' && (
           <div className="animate-enter pb-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -495,7 +509,7 @@ export default function App() {
                       </h4>
                       
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
-                        {o.items && o.items.length > 0 ? (
+                        {Array.isArray(o.items) && o.items.length > 0 ? (
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm">
                               <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase border-b border-slate-100">
@@ -520,7 +534,7 @@ export default function App() {
                                       <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span>
                                     </td>
                                     <td className="p-3 text-right pr-4 font-medium text-slate-600">
-                                      {formatMoney(item.unit_price * item.quantity)}
+                                      {formatMoney(Number(item.unit_price) * Number(item.quantity))}
                                     </td>
                                   </tr>
                                 ))}
