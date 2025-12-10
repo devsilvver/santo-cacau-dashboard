@@ -1,0 +1,28 @@
+name: Deploy Dashboard
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  web-deploy:
+    name: 🚀 Deploy Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🔨 Instalar e Buildar
+        run: |
+          npm install
+          npm run build
+
+      - name: 📂 Enviar para FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # Pasta local onde o Vite gera o site
+          local-dir: ./dist/
+          # Pasta no servidor (Crie a pasta 'admin' no public_html antes!)
+          server-dir: ./public_html/admin/
