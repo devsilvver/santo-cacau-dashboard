@@ -81,7 +81,6 @@ export default function App() {
   useEffect(() => {
     const verifyAccess = async () => {
       try {
-        // Restaurado /api/
         const res = await fetch(`${API_URL}/api/allowed-ips`);
         if (res.status === 403) {
           setIsAuthorized(false);
@@ -103,10 +102,9 @@ export default function App() {
   // --- POLLING (ATUALIZAÇÃO EM TEMPO REAL) ---
   useEffect(() => {
     let interval: any;
-    // Só ativa o polling se estiver na tela de vendas e autorizado
     if (isAuthorized && view === 'SALES') {
-        loadOrders(); // Carrega imediatamente ao entrar
-        interval = setInterval(loadOrders, 5000); // Atualiza a cada 5 segundos
+        loadOrders(); 
+        interval = setInterval(loadOrders, 5000); 
     }
     return () => clearInterval(interval);
   }, [view, isAuthorized]);
@@ -116,7 +114,6 @@ export default function App() {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      // Restaurado /api/
       const res = await fetch(`${API_URL}/api/products`);
       if (res.ok) {
         const data = await res.json();
@@ -128,7 +125,6 @@ export default function App() {
 
   const loadOrders = async () => {
     try {
-      // Restaurado /api/
       const res = await fetch(`${API_URL}/api/admin/orders`);
       
       if (res.status === 403) { 
@@ -138,7 +134,6 @@ export default function App() {
       
       const data = await res.json();
       
-      // --- CORREÇÃO DA TELA BRANCA ---
       const treatedData = Array.isArray(data) ? data.map((o: any) => {
           const orderDate = new Date(o.created_at).getTime();
           const now = new Date().getTime();
@@ -168,7 +163,6 @@ export default function App() {
   const loadIps = async () => {
     setLoading(true);
     try {
-      // Restaurado /api/
       const res = await fetch(`${API_URL}/api/allowed-ips`);
       if (res.status === 403) { setIsAuthorized(false); return; }
       const data = await res.json();
@@ -187,9 +181,28 @@ export default function App() {
 
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = { ...prodForm, price: parseFloat(prodForm.price), abv: parseFloat(prodForm.abv) };
+    
+    // --- CORREÇÃO IMPORTANTE DE VALIDAÇÃO ---
+    // 1. Substitui vírgula por ponto para evitar erro de banco de dados
+    const priceString = String(prodForm.price).replace(',', '.');
+    const abvString = String(prodForm.abv).replace(',', '.');
+    
+    const priceFinal = parseFloat(priceString);
+    const abvFinal = parseFloat(abvString);
+
+    // 2. Valida se é número real
+    if (isNaN(priceFinal) || isNaN(abvFinal)) {
+        alert("Erro: O preço e o teor alcoólico devem ser números válidos (Ex: 29.90).");
+        return;
+    }
+
+    const payload = { 
+        ...prodForm, 
+        price: priceFinal, 
+        abv: abvFinal 
+    };
+    
     const method = editingId ? 'PUT' : 'POST';
-    // Restaurado /api/
     const url = editingId ? `${API_URL}/api/products/${editingId}` : `${API_URL}/api/products`;
 
     try {
@@ -198,10 +211,28 @@ export default function App() {
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(payload) 
       });
+
       if (res.status === 403) { setIsAuthorized(false); return; }
-      if (res.ok) { setView('PRODUCTS'); loadProducts(); }
-      else { alert('Erro ao salvar.'); }
-    } catch (e) { alert('Erro de conexão.'); }
+
+      if (res.ok) { 
+          setView('PRODUCTS'); 
+          loadProducts(); 
+          // Limpa o form se for novo
+          if (!editingId) handleCreateProd();
+      }
+      else { 
+          // --- MOSTRA O ERRO REAL DO SERVIDOR ---
+          try {
+              const errorData = await res.json();
+              alert('Erro do Servidor: ' + (errorData.error || errorData.message || 'Falha desconhecida ao salvar.'));
+          } catch (jsonError) {
+              alert('Erro ao salvar. Verifique se todos os campos estão preenchidos corretamente.');
+          }
+      }
+    } catch (e) { 
+        console.error(e);
+        alert('Erro de conexão. A API pode estar offline.'); 
+    }
   };
 
   const handleEditProd = (p: Product) => {
@@ -227,7 +258,6 @@ export default function App() {
   const handleSaveIp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Restaurado /api/
       const res = await fetch(`${API_URL}/api/allowed-ips`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc })
@@ -241,7 +271,6 @@ export default function App() {
   const confirmDelete = async () => {
     if (!deleteModal.id) return;
     try {
-      // Restaurado /api/
       let url = deleteModal.type === 'PROD' 
         ? `${API_URL}/api/products/${deleteModal.id}`
         : `${API_URL}/api/allowed-ips/${deleteModal.id}`;
