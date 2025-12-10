@@ -25,8 +25,8 @@ import {
   DollarSign
 } from 'lucide-react';
 
-// URL da API no Render
-const API_URL = 'https://romulo.rockinhost.com.br/';
+// URL da API
+const API_URL = 'https://romulo.rockinhost.com.br';
 
 // --- INTERFACES ---
 interface Product {
@@ -81,7 +81,7 @@ export default function App() {
   useEffect(() => {
     const verifyAccess = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/allowed-ips`);
+        const res = await fetch(`${API_URL}/allowed-ips`);
         if (res.status === 403) {
           setIsAuthorized(false);
         } else if (res.ok) {
@@ -115,7 +115,7 @@ export default function App() {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/products`);
+      const res = await fetch(`${API_URL}/products`);
       if (res.ok) {
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : []);
@@ -126,7 +126,7 @@ export default function App() {
 
   const loadOrders = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/orders`);
+      const res = await fetch(`${API_URL}/admin/orders`);
       
       if (res.status === 403) { 
         setIsAuthorized(false); 
@@ -170,7 +170,7 @@ export default function App() {
   const loadIps = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/allowed-ips`);
+      const res = await fetch(`${API_URL}/allowed-ips`);
       if (res.status === 403) { setIsAuthorized(false); return; }
       const data = await res.json();
       setIps(Array.isArray(data) ? data : []);
@@ -191,7 +191,7 @@ export default function App() {
     e.preventDefault();
     const payload = { ...prodForm, price: parseFloat(prodForm.price), abv: parseFloat(prodForm.abv) };
     const method = editingId ? 'PUT' : 'POST';
-    const url = editingId ? `${API_URL}/api/products/${editingId}` : `${API_URL}/api/products`;
+    const url = editingId ? `${API_URL}/products/${editingId}` : `${API_URL}/products`;
 
     try {
       const res = await fetch(url, { 
@@ -228,7 +228,7 @@ export default function App() {
   const handleSaveIp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/allowed-ips`, {
+      const res = await fetch(`${API_URL}/allowed-ips`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc })
       });
@@ -242,8 +242,8 @@ export default function App() {
     if (!deleteModal.id) return;
     try {
       let url = deleteModal.type === 'PROD' 
-        ? `${API_URL}/api/products/${deleteModal.id}`
-        : `${API_URL}/api/allowed-ips/${deleteModal.id}`;
+        ? `${API_URL}/products/${deleteModal.id}`
+        : `${API_URL}/allowed-ips/${deleteModal.id}`;
 
       const res = await fetch(url, { method: 'DELETE' });
       if (res.status === 403) { setIsAuthorized(false); return; }
