@@ -299,8 +299,8 @@ export default function App() {
           <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
             <Lock className="w-10 h-10 text-red-500" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Acesso Restrito</h1>
-          <p className="text-slate-500 mb-8">IP não autorizado. Contate o administrador.</p>
+          <h1 className="text-2xl font-bold text-slate-800 mb-2">Área Restrita</h1>
+          <p className="text-slate-500 mb-8">Acesso não autorizado. Contate o administrador.</p>
           <div className="border-t border-slate-100 pt-6">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">&copy; 2025 Celeiro da Cachaça</p>
           </div>
