@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 // URL da API no Render
-const API_URL = 'https://api-celeiro-da-cachaca.onrender.com';
+const API_URL = 'https://romulo.rockinhost.com.br/';
 
 // --- INTERFACES ---
 interface Product {
