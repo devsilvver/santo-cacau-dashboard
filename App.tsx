@@ -25,7 +25,7 @@ import {
   DollarSign
 } from 'lucide-react';
 
-// URL da API
+// URL da API (Sem barra no final)
 const API_URL = 'https://romulo.rockinhost.com.br';
 
 // --- INTERFACES ---
@@ -81,7 +81,8 @@ export default function App() {
   useEffect(() => {
     const verifyAccess = async () => {
       try {
-        const res = await fetch(`${API_URL}/allowed-ips`);
+        // Restaurado /api/
+        const res = await fetch(`${API_URL}/api/allowed-ips`);
         if (res.status === 403) {
           setIsAuthorized(false);
         } else if (res.ok) {
@@ -115,7 +116,8 @@ export default function App() {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/products`);
+      // Restaurado /api/
+      const res = await fetch(`${API_URL}/api/products`);
       if (res.ok) {
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : []);
@@ -126,7 +128,8 @@ export default function App() {
 
   const loadOrders = async () => {
     try {
-      const res = await fetch(`${API_URL}/admin/orders`);
+      // Restaurado /api/
+      const res = await fetch(`${API_URL}/api/admin/orders`);
       
       if (res.status === 403) { 
         setIsAuthorized(false); 
@@ -136,28 +139,23 @@ export default function App() {
       const data = await res.json();
       
       // --- CORREÇÃO DA TELA BRANCA ---
-      // Converte os itens (que podem vir como string JSON do MySQL) para array real
       const treatedData = Array.isArray(data) ? data.map((o: any) => {
           const orderDate = new Date(o.created_at).getTime();
           const now = new Date().getTime();
           const hoursDiff = (now - orderDate) / (1000 * 3600);
           
           let statusFinal = o.status;
-          // Se pendente há mais de 24h, mostramos como Cancelado
           if (o.status === 'pending' && hoursDiff > 24) {
               statusFinal = 'cancelled';
           }
 
-          // Parse seguro dos itens
           let parsedItems = [];
           try {
-            // Se for string, converte. Se já for array, usa direto.
             parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items;
           } catch (err) {
             parsedItems = [];
           }
 
-          // Garante que é um array, mesmo se vier null
           if (!Array.isArray(parsedItems)) parsedItems = [];
 
           return { ...o, status: statusFinal, items: parsedItems };
@@ -170,7 +168,8 @@ export default function App() {
   const loadIps = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/allowed-ips`);
+      // Restaurado /api/
+      const res = await fetch(`${API_URL}/api/allowed-ips`);
       if (res.status === 403) { setIsAuthorized(false); return; }
       const data = await res.json();
       setIps(Array.isArray(data) ? data : []);
@@ -178,7 +177,6 @@ export default function App() {
     setLoading(false);
   };
 
-  // Carregamento inicial ao trocar de abas (exceto Vendas que tem polling)
   useEffect(() => {
     if (!isAuthorized) return;
     if (view === 'PRODUCTS') loadProducts();
@@ -191,7 +189,8 @@ export default function App() {
     e.preventDefault();
     const payload = { ...prodForm, price: parseFloat(prodForm.price), abv: parseFloat(prodForm.abv) };
     const method = editingId ? 'PUT' : 'POST';
-    const url = editingId ? `${API_URL}/products/${editingId}` : `${API_URL}/products`;
+    // Restaurado /api/
+    const url = editingId ? `${API_URL}/api/products/${editingId}` : `${API_URL}/api/products`;
 
     try {
       const res = await fetch(url, { 
@@ -228,7 +227,8 @@ export default function App() {
   const handleSaveIp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/allowed-ips`, {
+      // Restaurado /api/
+      const res = await fetch(`${API_URL}/api/allowed-ips`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc })
       });
@@ -241,9 +241,10 @@ export default function App() {
   const confirmDelete = async () => {
     if (!deleteModal.id) return;
     try {
+      // Restaurado /api/
       let url = deleteModal.type === 'PROD' 
-        ? `${API_URL}/products/${deleteModal.id}`
-        : `${API_URL}/allowed-ips/${deleteModal.id}`;
+        ? `${API_URL}/api/products/${deleteModal.id}`
+        : `${API_URL}/api/allowed-ips/${deleteModal.id}`;
 
       const res = await fetch(url, { method: 'DELETE' });
       if (res.status === 403) { setIsAuthorized(false); return; }
@@ -281,7 +282,6 @@ export default function App() {
 
   // --- RENDERIZAÇÃO CONDICIONAL ---
 
-  // 1. Verificando
   if (isCheckingAuth) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
@@ -291,7 +291,6 @@ export default function App() {
     );
   }
 
-  // 2. Bloqueado
   if (!isAuthorized) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-slate-100 p-4">
@@ -309,7 +308,6 @@ export default function App() {
     );
   }
 
-  // 3. App Principal
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
