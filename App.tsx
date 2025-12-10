@@ -359,7 +359,7 @@ export default function App() {
             <img src="https://i.imgur.com/Q3oTWj1.png" className="w-20 h-auto object-contain" alt="logo"/>
           </div>
           <h1 className="text-xl font-bold text-yellow-500 flex items-center gap-2">Celeiro Admin</h1>
-          <p className="text-xs text-slate-500 mt-2 font-medium bg-slate-800 px-3 py-1 rounded-full">v3.0 Online</p>
+          <p className="text-xs text-slate-500 mt-2 font-medium bg-slate-800 px-3 py-1 rounded-full">Online</p>
         </div>
         
         <nav className="flex-1 px-4 space-y-2 mt-6 overflow-y-auto">
