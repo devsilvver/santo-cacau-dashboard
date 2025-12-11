@@ -25,8 +25,8 @@ import {
   DollarSign
 } from 'lucide-react';
 
-// URL da API (Sem barra no final)
-const API_URL = 'https://romulo.rockinhost.com.br';
+// URL da API
+const API_URL = 'https://api-celeiro-da-cachaca.onrender.com';
 
 // --- INTERFACES ---
 interface Product {
