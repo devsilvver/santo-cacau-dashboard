@@ -31,12 +31,13 @@ import {
   AlertCircle,
   Monitor,
   PackageOpen,
-  // NOVOS ÍCONES ADICIONADOS
+  // ÍCONES ADICIONADOS/CORRIGIDOS
   Mail,
   Phone,
   Truck,
   CreditCard,
   Home,
+  ChevronDown,
 } from "lucide-react";
 
 const API_URL = "https://api-celeiro-da-cachaca.onrender.com";
@@ -392,6 +393,12 @@ export default function App() {
     id: string | number | null;
   }>({ open: false, type: null, id: null });
 
+  const [openOrderId, setOpenOrderId] = useState<number | null>(null);
+
+  const toggleOrder = (id: number) => {
+    setOpenOrderId(openOrderId === id ? null : id);
+  };
+
   const verifyAccess = async () => {
     setIsCheckingAuth(true);
     try {
@@ -500,9 +507,15 @@ export default function App() {
         // EM PROD, VOCÊ DEVE GARANTIR QUE SUA API RETORNE ESSES DADOS!
         const mockedOrders = data.map((order: any) => ({
           ...order,
-          shipping_method: order.shipping_method || (order.shipping_address.includes("Rua Principal") ? "Retirada na Loja" : "Correios Sedex"),
-          payment_method: order.mp_payment_id ? "Cartão de Crédito/PIX (MP)" : "Boleto Pendente",
-          shipping_address: order.shipping_address || "Endereço indisponível"
+          shipping_method:
+            order.shipping_method ||
+            (order.shipping_address.includes("Rua Principal")
+              ? "Retirada na Loja"
+              : "Correios Sedex"),
+          payment_method: order.mp_payment_id
+            ? "Cartão de Crédito/PIX (MP)"
+            : "Boleto Pendente",
+          shipping_address: order.shipping_address || "Endereço indisponível",
         }));
         setOrders(mockedOrders);
       }
@@ -1537,7 +1550,7 @@ export default function App() {
             </div>
           )}
 
-          {/* --- VIEW: VENDAS (AGORA MAIS PROFISSIONAL) --- */}
+          {/* --- VIEW: VENDAS (AGORA MAIS PROFISSIONAL E EXPANSÍVEL) --- */}
           {view === "SALES" && (
             <div className="animate-enter pb-10">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -1554,181 +1567,268 @@ export default function App() {
                   ATUALIZANDO AO VIVO
                 </div>
               </div>
-              <div className="grid gap-6">
-                {orders.map((o) => (
-                  <div
-                    key={o.id}
-                    className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden group hover:shadow-2xl transition-all duration-300"
-                  >
-                    {/* Cabeçalho do Pedido */}
-                    <div className="bg-slate-900 text-white p-5 border-b border-slate-800 flex flex-wrap justify-between items-center gap-4">
-                      <div className="flex items-center gap-4">
-                        <span className="font-extrabold text-2xl text-yellow-500">
-                          #{o.id}
-                        </span>
-                        <div>
-                          <p className="text-sm font-light text-slate-300">
-                            ID Transação:{" "}
-                            <span className="font-mono text-xs text-yellow-300">
-                              {o.mp_payment_id || "N/A"}
-                            </span>
-                          </p>
-                          <p className="text-sm font-medium text-slate-100 flex items-center gap-2">
-                            <Clock size={14} />{" "}
-                            {formatDate(o.created_at)}
-                          </p>
-                        </div>
-                      </div>
-                      <div
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(
-                          o.status
-                        )}`}
+              <div className="grid gap-4">
+                {orders.map((o) => {
+                  const isOpen = openOrderId === o.id;
+                  return (
+                    <div
+                      key={o.id}
+                      className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden transition-shadow duration-300"
+                    >
+                      {/* CABEÇALHO CLICÁVEL (Acordeão Trigger) */}
+                      <button
+                        onClick={() => toggleOrder(o.id)}
+                        className={`w-full flex justify-between items-center p-5 transition-all duration-300 ${
+                          isOpen
+                            ? "bg-slate-900 text-white"
+                            : "hover:bg-slate-50"
+                        }`}
                       >
-                        {translateStatus(o.status)}
-                      </div>
-                    </div>
-
-                    <div className="p-6 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                      {/* COLUNA 1: Cliente e Contato */}
-                      <div className="lg:col-span-1 space-y-6">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                            <User size={14} /> Cliente
-                          </h4>
-                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
-                            <p className="font-bold text-slate-800 text-lg leading-tight">
+                        {/* Informações Primárias */}
+                        <div className="flex items-center gap-6">
+                          <span
+                            className={`font-extrabold text-2xl ${
+                              isOpen ? "text-yellow-500" : "text-slate-800"
+                            }`}
+                          >
+                            #{o.id}
+                          </span>
+                          <div className="hidden sm:block text-left">
+                            <p
+                              className={`text-sm font-medium ${
+                                isOpen ? "text-slate-100" : "text-slate-700"
+                              }`}
+                            >
+                              <User size={14} className="inline mr-2 -mt-0.5" />
                               {o.full_name}
                             </p>
-                            <div className="space-y-1">
-                              <p className="text-slate-500 text-sm flex items-center gap-2">
-                                <Mail size={14} className="text-blue-500" />{" "}
-                                {o.email}
-                              </p>
-                              <p className="text-slate-500 text-sm flex items-center gap-2">
-                                <Phone size={14} className="text-green-500" />{" "}
-                                {o.phone}
-                              </p>
-                            </div>
+                            <p
+                              className={`text-xs ${
+                                isOpen ? "text-slate-400" : "text-slate-500"
+                              }`}
+                            >
+                              <Clock
+                                size={12}
+                                className="inline mr-1 -mt-0.5"
+                              />
+                              {formatDate(o.created_at)}
+                            </p>
                           </div>
                         </div>
 
-                        {/* Detalhes de Logística */}
-                        <div className="space-y-4">
-                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3 mt-6">
-                            <Package size={14} /> Logística
-                          </h4>
-                          <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 shadow-sm">
-                            <div className="flex items-center gap-3">
-                              <Truck size={20} className="text-yellow-600 shrink-0" />
-                              <div>
-                                <p className="text-xs font-bold text-slate-500 uppercase">
-                                  Método de Envio
-                                </p>
-                                <p className="font-semibold text-slate-800 leading-none">
-                                  {o.shipping_method}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <CreditCard size={20} className="text-purple-600 shrink-0" />
-                              <div>
-                                <p className="text-xs font-bold text-slate-500 uppercase">
-                                  Pagamento
-                                </p>
-                                <p className="font-semibold text-slate-800 leading-none">
-                                  {o.payment_method}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* COLUNA 2: Endereço de Envio */}
-                      <div className="lg:col-span-1">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                          <Home size={14} /> Endereço de Entrega
-                        </h4>
-                        <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-1 h-full shadow-sm">
-                          <p className="text-slate-600 whitespace-pre-line">
-                            {o.shipping_address}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* COLUNA 3 e 4: Itens e Total (Expandida para melhor visualização) */}
-                      <div className="lg:col-span-3 xl:col-span-2 flex flex-col h-full">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                          <Package size={14} /> Itens Comprados
-                        </h4>
-                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
-                          {Array.isArray(o.items) && o.items.length > 0 ? (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-50 text-xs font-medium text-slate-500 uppercase">
-                                    <tr>
-                                        <th className="p-3 pl-4">Produto</th>
-                                        <th className="p-3 text-center">Qtde</th>
-                                        <th className="p-3 text-right pr-4">Subtotal</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {o.items.map((item, idx) => (
-                                    <tr
-                                      key={idx}
-                                      className="hover:bg-slate-50/50"
-                                    >
-                                      <td className="p-3 pl-4">
-                                        <div className='flex items-center gap-3'>
-                                            <div className="w-10 h-10 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-1 shadow-sm">
-                                                <img 
-                                                    src={item.image} 
-                                                    className="w-full h-full object-contain"
-                                                    alt={item.name}
-                                                />
-                                            </div>
-                                            <span className="font-medium text-slate-700">
-                                              {item.name}
-                                              <span className="block text-xs text-slate-400 font-normal mt-0.5">
-                                                  {formatMoney(Number(item.unit_price))} p/ un.
-                                              </span>
-                                            </span>
-                                        </div>
-                                      </td>
-                                      <td className="p-3 text-center">
-                                        <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">
-                                          x{item.quantity}
-                                        </span>
-                                      </td>
-                                      <td className="p-3 text-right pr-4 font-bold text-slate-700">
-                                        {formatMoney(
-                                          Number(item.unit_price) *
-                                            Number(item.quantity)
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : (
-                            <div className="p-8 text-center text-slate-400">
-                              Detalhes dos itens indisponíveis.
-                            </div>
-                          )}
-                        </div>
-                        <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center shadow-md">
-                          <span className="text-green-800 text-lg font-bold uppercase tracking-wide">
-                            Total do Pedido
+                        {/* Status e Total */}
+                        <div className="flex items-center gap-4">
+                          <span
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(
+                              o.status
+                            )}`}
+                          >
+                            {translateStatus(o.status)}
                           </span>
-                          <div className="flex items-center gap-1 text-3xl font-extrabold text-green-700">
+                          <span
+                            className={`font-extrabold text-lg hidden md:block ${
+                              isOpen ? "text-green-400" : "text-green-600"
+                            }`}
+                          >
                             {formatMoney(o.total_amount)}
+                          </span>
+                          <ChevronDown
+                            size={20}
+                            className={`transition-transform duration-300 ${
+                              isOpen
+                                ? "rotate-180 text-yellow-500"
+                                : "text-slate-400"
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {/* CORPO EXPANSÍVEL (Detalhes) */}
+                      <div
+                        className={`overflow-hidden transition-max-height duration-500 ease-in-out ${
+                          isOpen
+                            ? "max-h-screen border-t border-slate-200"
+                            : "max-h-0"
+                        }`}
+                      >
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8 bg-slate-50">
+                          {/* COLUNA 1: Cliente e Logística */}
+                          <div className="lg:col-span-1 space-y-6">
+                            {/* Dados do Cliente */}
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                                <User size={14} /> Contato do Cliente
+                              </h4>
+                              <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-2 shadow-sm">
+                                <p className="font-bold text-slate-800 text-lg leading-tight">
+                                  {o.full_name}
+                                </p>
+                                <p className="text-slate-600 text-sm flex items-center gap-2">
+                                  <Mail size={14} className="text-blue-500" />{" "}
+                                  {o.email}
+                                </p>
+                                <p className="text-slate-600 text-sm flex items-center gap-2">
+                                  <Phone size={14} className="text-green-500" />{" "}
+                                  {o.phone}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Detalhes de Logística */}
+                            <div className="space-y-4">
+                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                                <Package size={14} /> Detalhes da Compra
+                              </h4>
+                              <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 shadow-sm">
+                                <div className="flex items-center gap-3">
+                                  <Truck
+                                    size={20}
+                                    className="text-yellow-600 shrink-0"
+                                  />
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-500 uppercase">
+                                      Método de Envio
+                                    </p>
+                                    <p className="font-semibold text-slate-800 leading-none">
+                                      {o.shipping_method}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <CreditCard
+                                    size={20}
+                                    className="text-purple-600 shrink-0"
+                                  />
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-500 uppercase">
+                                      Pagamento
+                                    </p>
+                                    <p className="font-semibold text-slate-800 leading-none">
+                                      {o.payment_method}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3 border-t pt-3 mt-3 border-slate-100">
+                                  <DollarSign
+                                    size={20}
+                                    className="text-red-500 shrink-0"
+                                  />
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-500 uppercase">
+                                      ID Transação
+                                    </p>
+                                    <p className="font-mono text-xs text-slate-800 leading-none">
+                                      {o.mp_payment_id || "Não Registrado"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* COLUNA 2: Endereço de Entrega (Corrigido) */}
+                          <div className="lg:col-span-1">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                              <Home size={14} /> Endereço de Entrega
+                            </h4>
+                            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-1 shadow-sm h-full min-h-[150px]">
+                              <p className="text-slate-700 font-medium whitespace-pre-line">
+                                {o.shipping_address ||
+                                  "Endereço não fornecido ou indisponível."}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* COLUNA 3 e 4: Itens Comprados e Total */}
+                          <div className="lg:col-span-3 xl:col-span-2 flex flex-col h-full">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                              <ShoppingBag size={14} /> Itens do Pedido
+                            </h4>
+                            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
+                              {Array.isArray(o.items) && o.items.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-left text-sm">
+                                    <thead className="bg-gray-50 text-xs font-medium text-slate-500 uppercase">
+                                      <tr>
+                                        <th className="p-3 pl-4">Produto</th>
+                                        <th className="p-3 text-center">
+                                          Qtde
+                                        </th>
+                                        <th className="p-3 text-right pr-4">
+                                          Subtotal
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {o.items.map((item, idx) => (
+                                        <tr
+                                          key={idx}
+                                          className="hover:bg-slate-50/50"
+                                        >
+                                          <td className="p-3 pl-4">
+                                            <div className="flex items-center gap-3">
+                                              <div className="w-10 h-10 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-1 shadow-sm shrink-0">
+                                                <img
+                                                  src={item.image}
+                                                  className="w-full h-full object-contain"
+                                                  alt={item.name}
+                                                  onError={(e) =>
+                                                    (e.currentTarget.style.display =
+                                                      "none")
+                                                  }
+                                                />
+                                                <PackageOpen
+                                                  size={16}
+                                                  className="text-slate-300"
+                                                />
+                                              </div>
+                                              <span className="font-medium text-slate-700">
+                                                {item.name}
+                                                <span className="block text-xs text-slate-400 font-normal mt-0.5">
+                                                  {formatMoney(
+                                                    Number(item.unit_price)
+                                                  )}{" "}
+                                                  p/ un.
+                                                </span>
+                                              </span>
+                                            </div>
+                                          </td>
+                                          <td className="p-3 text-center">
+                                            <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">
+                                              x{item.quantity}
+                                            </span>
+                                          </td>
+                                          <td className="p-3 text-right pr-4 font-bold text-slate-700">
+                                            {formatMoney(
+                                              Number(item.unit_price) *
+                                                Number(item.quantity)
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <div className="p-8 text-center text-slate-400">
+                                  Nenhum item na lista.
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center shadow-md">
+                              <span className="text-green-800 text-lg font-bold uppercase tracking-wide">
+                                Total do Pedido
+                              </span>
+                              <div className="flex items-center gap-1 text-3xl font-extrabold text-green-700">
+                                {formatMoney(o.total_amount)}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {!loading && orders.length === 0 && (
                   <div className="text-center py-24 text-slate-400">
                     Nenhuma venda registrada.
