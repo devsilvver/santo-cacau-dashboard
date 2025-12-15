@@ -31,6 +31,8 @@ import {
   AlertCircle,
   Monitor,
   PackageOpen,
+  Mail,
+  Phone
 } from "lucide-react";
 
 const API_URL = "https://api-celeiro-da-cachaca.onrender.com";
