@@ -28,7 +28,7 @@ import {
   Eye,
   CheckCircle2, 
   XCircle,      
-  AlertCircle
+  AlertCircle,
   Monitor
 } from 'lucide-react';
 
