@@ -176,19 +176,31 @@ export default function App() {
   const loadOrders = async () => {
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`);
-      if (res.status === 403) { setIsAuthorized(false); return; }
+      
+      if (res.status === 403) { 
+        setIsAuthorized(false); 
+        return; 
+      }
       
       const data = await res.json();
+      
       const treatedData = Array.isArray(data) ? data.map((o: any) => {
           const orderDate = new Date(o.created_at).getTime();
           const now = new Date().getTime();
           const hoursDiff = (now - orderDate) / (1000 * 3600);
           
           let statusFinal = o.status;
-          if (o.status === 'pending' && hoursDiff > 24) statusFinal = 'cancelled';
+          if (o.status === 'pending' && hoursDiff > 24) {
+              statusFinal = 'cancelled';
+          }
 
           let parsedItems = [];
-          try { parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items; } catch (err) { parsedItems = []; }
+          try {
+            parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items;
+          } catch (err) {
+            parsedItems = [];
+          }
+
           if (!Array.isArray(parsedItems)) parsedItems = [];
 
           return { ...o, status: statusFinal, items: parsedItems };
@@ -219,8 +231,12 @@ export default function App() {
 
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const priceFinal = parseFloat(String(prodForm.price).replace(',', '.'));
-    const abvFinal = parseFloat(String(prodForm.abv).replace(',', '.'));
+    
+    const priceString = String(prodForm.price).replace(',', '.');
+    const abvString = String(prodForm.abv).replace(',', '.');
+    
+    const priceFinal = parseFloat(priceString);
+    const abvFinal = parseFloat(abvString);
 
     if (isNaN(priceFinal) || isNaN(abvFinal)) {
         alert("Erro: O preço e o teor alcoólico devem ser números válidos.");
@@ -250,18 +266,21 @@ export default function App() {
           await loadProducts(); 
           if (!editingId) handleCreateProd();
           setView('PRODUCTS');
-      } else { 
+      }
+      else { 
           try {
               const errorData = await res.json();
               alert('Erro do Servidor: ' + (errorData.error || errorData.message));
-          } catch (jsonError) { alert('Erro ao salvar produto.'); }
+          } catch (jsonError) {
+              alert('Erro ao salvar produto.');
+          }
       }
-    } catch (e) { alert('Erro de conexão.'); }
+    } catch (e) { 
+        console.error(e);
+        alert('Erro de conexão.'); 
+    }
   };
 
-  // --- NOVAS FUNÇÕES DE ESTOQUE (PASSO 2.1) ---
-  
-  // Função que envia para o servidor (usada pelos botões e pelo input)
   const persistStock = async (id: string, newQuantity: number) => {
     try {
         const res = await fetch(`${API_URL}/api/products/${id}/stock`, {
@@ -277,16 +296,12 @@ export default function App() {
     }
   };
 
-  // Chamada pelos botões + e -
   const updateStock = (id: string, currentStock: number, change: number) => {
     const newStock = Math.max(0, currentStock + change);
-    // Atualiza na tela
     setProducts(products.map(p => p.id === id ? {...p, stock_quantity: newStock} : p));
-    // Salva no banco
     persistStock(id, newStock);
   };
 
-  // Chamada quando você digita manualmente
   const handleManualStockChange = (id: string, value: string) => {
       const newStock = parseInt(value);
       if (isNaN(newStock)) return; 
@@ -365,6 +380,13 @@ export default function App() {
   };
   
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
+
+  // Helper para bloquear input numérico
+  const preventNonNumeric = (e: React.KeyboardEvent) => {
+    if (["e", "E", "+", "-"].includes(e.key)) {
+        e.preventDefault();
+    }
+  };
 
   if (isCheckingAuth) {
     return (
@@ -486,8 +508,6 @@ export default function App() {
                                 </div>
                             </div>
                         </td>
-                        
-                        {/* --- PASSO 2.2 IMPLEMENTADO AQUI (INPUT MANUAL) --- */}
                         <td className="px-6 py-3">
                             <div className="flex items-center gap-1 bg-slate-100 w-fit px-2 py-1 rounded-lg border border-slate-200 shadow-sm">
                                 <button 
@@ -497,7 +517,6 @@ export default function App() {
                                     <Minus size={14}/>
                                 </button>
                                 
-                                {/* Input para digitar manualmente */}
                                 <input 
                                     type="number"
                                     className={`w-12 text-center bg-transparent outline-none font-mono font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`}
@@ -505,9 +524,8 @@ export default function App() {
                                     onChange={(e) => handleManualStockChange(p.id, e.target.value)}
                                     onBlur={(e) => persistStock(p.id, parseInt(e.target.value) || 0)}
                                     onKeyDown={(e) => {
-                                        if(e.key === 'Enter') {
-                                            e.currentTarget.blur();
-                                        }
+                                        preventNonNumeric(e);
+                                        if(e.key === 'Enter') e.currentTarget.blur();
                                     }}
                                 />
 
@@ -519,7 +537,6 @@ export default function App() {
                                 </button>
                             </div>
                         </td>
-                        
                         <td className="px-6 py-3 font-bold text-green-600">{formatMoney(p.price)}</td>
                         <td className="px-6 py-3 text-right">
                           <div className="flex justify-end gap-2">
@@ -713,12 +730,16 @@ export default function App() {
                   <img src="https://i.imgur.com/Q3oTWj1.png" className="h-12 opacity-20 absolute right-4 rotate-12" alt="logo"/>
                </div>
                <form onSubmit={handleSaveProd} className="p-8 space-y-6">
+                 {/* GRID PRINCIPAL */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Linha 1: Nome (Largura Total) */}
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Produto</label>
-                        <input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 outline-none" 
+                        <input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 outline-none transition-all" 
                             value={prodForm.name} onChange={e=>setProdForm({...prodForm, name: e.target.value})}/>
                     </div>
+
+                    {/* Linha 2: Embalagem e Tipo */}
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">Embalagem</label>
                         <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.packaging} onChange={e=>{
@@ -734,32 +755,59 @@ export default function App() {
                             <option>Curtida</option><option>Doce</option>
                         </select>
                     </div>
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Preço (R$)</label>
-                        <input required type="number" step="0.01" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Teor Alcoólico (%)</label>
-                        <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/>
+
+                    {/* Linha 3: Campos Pequenos Agrupados (Preço, Vol, ABV, Estoque) */}
+                    <div className="col-span-1 md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Preço (R$)</label>
+                            <input required type="number" step="0.01" onKeyDown={preventNonNumeric} 
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" 
+                                value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Volume</label>
+                            <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" 
+                                value={prodForm.volume} onChange={e=>setProdForm({...prodForm, volume: e.target.value})}/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Teor (%)</label>
+                            <input type="number" onKeyDown={preventNonNumeric}
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" 
+                                value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Estoque</label>
+                            <input type="number" onKeyDown={preventNonNumeric}
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500 bg-slate-50" 
+                                value={prodForm.stock_quantity} onChange={e=>setProdForm({...prodForm, stock_quantity: e.target.value})}/>
+                        </div>
                     </div>
                     
-                    {/* CAMPO DE ESTOQUE NO FORMULÁRIO */}
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Quantidade em Estoque</label>
-                        <input type="number" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" value={prodForm.stock_quantity} onChange={e=>setProdForm({...prodForm, stock_quantity: e.target.value})}/>
-                    </div>
-                    
-                    <div>
+                    {/* Linha 4: Imagem e Preview */}
+                    <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-bold text-slate-700 mb-1">URL da Imagem</label>
-                        <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>
+                        <div className="flex flex-col md:flex-row gap-4 items-start">
+                            <input className="flex-1 w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" 
+                                value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>
+                            
+                            {/* PREVIEW DA IMAGEM MAIOR */}
+                            {prodForm.imageUrl && (
+                                <div className="w-40 h-40 shrink-0 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 shadow-sm overflow-hidden">
+                                    <img src={prodForm.imageUrl} className="w-full h-full object-contain" alt="Preview" 
+                                        onError={(e) => e.currentTarget.style.display = 'none'} />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
+                    {/* Linha 5: Descrição */}
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label>
-                        <textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none" value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/>
+                        <textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none focus:border-yellow-500" 
+                            value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/>
                     </div>
                  </div>
-                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
                     <Save size={20}/> Salvar e Fechar
                  </button>
                </form>
@@ -767,7 +815,6 @@ export default function App() {
           </div>
         )}
 
-        {/* MODAL EXCLUSÃO */}
         {deleteModal.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-enter">
             <div className="bg-white rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl border border-slate-200">
@@ -784,14 +831,7 @@ export default function App() {
         </div>
       </main>
 
-      <style>{`
-        .animate-enter { animation: enter 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes enter { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      `}</style>
+      <style>{`.animate-enter { animation: enter 0.4s cubic-bezier(0.16, 1, 0.3, 1); } @keyframes enter { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } } ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }`}</style>
     </div>
   );
 }
