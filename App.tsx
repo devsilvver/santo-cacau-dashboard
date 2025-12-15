@@ -5,78 +5,141 @@ import {
   Trash2, 
   Save, 
   Search, 
-  Edit,
+  Edit, 
   X,
-  AlertTriangle,
-  ShoppingBag,
-  Shield,
-  MapPin,
-  Phone,
-  Mail,
-  User,
-  Menu,
-  Lock,
+  AlertTriangle, 
+  ShoppingBag, 
+  Shield, 
+  User, 
+  Menu, 
+  Lock, 
   Loader2,
-  Github,
-  Package,
-  Clock,
-  Hash,
-  DollarSign,
-  Terminal,
-  Minus,
+  Github, 
+  Package, 
+  Clock, 
+  DollarSign, 
+  Terminal, 
+  Minus, 
   Plus,
   Palette,      // Novo
   CheckSquare,  // Novo
-  Square        // Novo
+  Square,       // Novo
+  ImageIcon,    // Novo
+  Eye           // Novo
 } from 'lucide-react';
 
-// URL da API
 const API_URL = 'https://api-celeiro-da-cachaca.onrender.com';
 
 // --- INTERFACES ---
-interface Product {
+interface Product { 
   id: string; 
   name: string; 
   description: string; 
-  price: number;
+  price: number; 
   image_url: string; 
   packaging: string; 
   type: string; 
   abv: number; 
-  volume: string;
-  stock_quantity: number;
+  volume: string; 
+  stock_quantity: number; 
 }
 
-interface OrderItem {
-  name: string; quantity: number; unit_price: number; image: string;
-}
+interface OrderItem { name: string; quantity: number; unit_price: number; image: string; }
 
-interface Order {
-  id: number; status: string; total_amount: string; created_at: string;
-  shipping_address: string; mp_payment_id: string;
-  full_name: string; email: string; phone: string;
+interface Order { 
+  id: number; 
+  status: string; 
+  total_amount: string; 
+  created_at: string; 
+  shipping_address: string; 
+  mp_payment_id: string; 
+  full_name: string; 
+  email: string; 
+  phone: string; 
   items: OrderItem[]; 
 }
 
-interface AllowedIp {
-  id: number; ip_address: string; description: string; created_at: string;
-}
-
-interface LogMessage {
-  type: string;
-  ip: string;
-  timestamp: string;
-  message: string;
-}
+interface AllowedIp { id: number; ip_address: string; description: string; created_at: string; }
+interface LogMessage { type: string; ip: string; timestamp: string; message: string; }
 
 // NOVA INTERFACE PARA CONFIGURAÇÃO DO SITE
 interface SiteConfig {
     banner_tag: string;
     banner_title: string;
+    banner_image: string; // URL da imagem do banner
     section_tag: string;
     section_title: string;
+    section_image: string; // URL da imagem da seção
     highlight_ids: string[];
 }
+
+// --- COMPONENTES DE PRÉ-VISUALIZAÇÃO (SIMULAÇÃO DO SITE) ---
+
+const BannerPreview = ({ config }: { config: SiteConfig }) => (
+    <div className="w-full bg-[#1A1A1A] py-8 px-6 rounded-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4 border border-gray-800 shadow-xl">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-[#DAA520] rounded-full blur-[60px] opacity-20"></div>
+        <div className="relative z-10 text-left max-w-sm">
+            <span className="inline-block px-3 py-1 bg-[#DAA520]/20 text-[#DAA520] text-[10px] font-bold uppercase tracking-widest rounded-full mb-3 border border-[#DAA520]/50">
+                {config.banner_tag || 'TAG DO BANNER'}
+            </span>
+            <h2 className="text-xl font-serif font-bold text-white mb-3 leading-tight">
+                {config.banner_title || 'Título do Banner'}
+            </h2>
+            <div className="flex gap-2">
+                <div className="w-24 h-8 bg-[#DAA520] rounded-lg opacity-80"></div>
+            </div>
+        </div>
+        <div className="relative z-10 w-24 h-24 shrink-0">
+            {config.banner_image ? (
+                <img src={config.banner_image} className="w-full h-full object-contain drop-shadow-2xl" alt="Banner Preview" onError={(e) => e.currentTarget.style.display='none'} />
+            ) : (
+                <div className="w-full h-full border-2 border-dashed border-gray-700 rounded-full flex items-center justify-center text-gray-500 text-xs text-center p-2">
+                    <ImageIcon size={20} className="mb-1 opacity-50"/>
+                </div>
+            )}
+        </div>
+    </div>
+);
+
+const SectionPreview = ({ config, products }: { config: SiteConfig, products: Product[] }) => {
+    // Pega os produtos selecionados para mostrar no preview
+    const previewProducts = products.filter(p => config.highlight_ids.includes(p.id)).slice(0, 2);
+    
+    return (
+        <div className="w-full bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 bg-gray-50 rounded-full shrink-0 overflow-hidden flex items-center justify-center border border-gray-100">
+                     {config.section_image ? <img src={config.section_image} className="w-full h-full object-contain p-2" alt="Icon" /> : <ImageIcon className="text-gray-300" size={20}/>}
+                </div>
+                <div>
+                    <span className="text-green-600 text-[10px] font-bold tracking-widest uppercase block mb-1">
+                        {config.section_tag || 'TAG DA SEÇÃO'}
+                    </span>
+                    <h2 className="text-lg font-serif text-gray-800 font-bold leading-none">
+                        {config.section_title || 'Título da Seção'}
+                    </h2>
+                </div>
+            </div>
+            
+            {/* Mini Grid de Produtos */}
+            <div className="grid grid-cols-2 gap-3">
+                {previewProducts.length > 0 ? previewProducts.map(p => (
+                    <div key={p.id} className="aspect-[3/4] bg-gray-50 rounded-xl border border-gray-100 flex flex-col items-center justify-center p-2 text-center relative overflow-hidden">
+                        <img src={p.image_url} className="h-12 w-auto object-contain mb-2" alt="" />
+                        <div className="w-16 h-2 bg-gray-200 rounded-full mb-1"></div>
+                        <div className="w-8 h-2 bg-green-100 rounded-full"></div>
+                    </div>
+                )) : (
+                    <>
+                        <div className="aspect-[3/4] bg-gray-50 rounded-xl border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Produto 1</div>
+                        <div className="aspect-[3/4] bg-gray-50 rounded-xl border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Produto 2</div>
+                    </>
+                )}
+            </div>
+            <p className="text-center text-[10px] text-gray-400 mt-3">Exibindo {config.highlight_ids.length} produtos selecionados</p>
+        </div>
+    );
+};
 
 export default function App() {
   // --- ESTADOS DE CONTROLE DE ACESSO ---
@@ -84,7 +147,6 @@ export default function App() {
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   // --- ESTADOS DE NAVEGAÇÃO E DADOS ---
-  // Adicionado 'SITE_CONFIG'
   const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY' | 'LOGS' | 'SITE_CONFIG'>('PRODUCTS');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -93,9 +155,11 @@ export default function App() {
   const [ips, setIps] = useState<AllowedIp[]>([]);
   const [logs, setLogs] = useState<LogMessage[]>([]);
   
-  // NOVO ESTADO: Configurações do Site
+  // ESTADO DE CONFIGURAÇÃO DO SITE (CMS)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
-      banner_tag: '', banner_title: '', section_tag: '', section_title: '', highlight_ids: []
+      banner_tag: '', banner_title: '', banner_image: '',
+      section_tag: '', section_title: '', section_image: '',
+      highlight_ids: []
   });
   
   const [loading, setLoading] = useState(false);
@@ -103,79 +167,45 @@ export default function App() {
 
   // --- ESTADOS DE FORMULÁRIOS ---
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  const [prodForm, setProdForm] = useState({
-    name: '', description: '', price: '', packaging: 'Garrafa PET',
-    type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L', stock_quantity: '0'
+  const [prodForm, setProdForm] = useState({ 
+    name: '', description: '', price: '', packaging: 'Garrafa PET', 
+    type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L', stock_quantity: '0' 
   });
-  
   const [ipForm, setIpForm] = useState({ ip: '', desc: '' });
+  const [deleteModal, setDeleteModal] = useState<{open: boolean, type: 'PROD'|'IP'|null, id: string|number|null}>({ open: false, type: null, id: null });
 
-  const [deleteModal, setDeleteModal] = useState<{open: boolean, type: 'PROD'|'IP'|null, id: string|number|null}>({
-    open: false, type: null, id: null
-  });
-
-  // --- VERIFICAÇÃO INICIAL (IP) ---
+  // --- VERIFICAÇÃO INICIAL ---
   const verifyAccess = async () => {
     setIsCheckingAuth(true);
     try {
       const res = await fetch(`${API_URL}/api/allowed-ips`);
-      if (res.status === 403) {
-        setIsAuthorized(false);
-      } else if (res.ok) {
-        setIsAuthorized(true);
-        loadProducts(); 
-      } else {
-        setIsAuthorized(false);
-      }
-    } catch (error) {
-      setIsAuthorized(false);
-    } finally {
-      setIsCheckingAuth(false);
-    }
+      if (res.ok) { setIsAuthorized(true); loadProducts(); } else { setIsAuthorized(false); }
+    } catch { setIsAuthorized(false); } 
+    finally { setIsCheckingAuth(false); }
   };
+  useEffect(() => { verifyAccess(); }, []);
 
-  useEffect(() => {
-    verifyAccess();
-  }, []);
-
-  // --- POLLING (VENDAS E ESTOQUE) ---
+  // --- POLLING ---
   useEffect(() => {
     let interval: any;
     if (isAuthorized) {
         if (view === 'SALES') loadOrders();
         if (view === 'PRODUCTS') loadProducts();
-
-        interval = setInterval(() => {
-            if (view === 'SALES') loadOrders();
-            if (view === 'PRODUCTS') loadProducts();
+        interval = setInterval(() => { 
+            if (view === 'SALES') loadOrders(); 
+            if (view === 'PRODUCTS') loadProducts(); 
         }, 5000); 
     }
     return () => clearInterval(interval);
   }, [view, isAuthorized]);
 
-  // --- LOGS (SSE) ---
+  // --- LOGS SSE ---
   useEffect(() => {
     if (!isAuthorized) return;
-
     const eventSource = new EventSource(`${API_URL}/api/logs/stream`);
-
-    eventSource.onmessage = (event) => {
-      try {
-        const newLog: LogMessage = JSON.parse(event.data);
-        setLogs(prevLogs => [newLog, ...prevLogs]); 
-      } catch (err) {
-        console.error("Erro ao processar log:", err);
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      eventSource.close();
-    };
-
-    return () => {
-      eventSource.close();
-    };
+    eventSource.onmessage = (event) => { try { setLogs(prev => [JSON.parse(event.data), ...prev]); } catch {} };
+    eventSource.onerror = () => eventSource.close();
+    return () => eventSource.close();
   }, [isAuthorized]);
 
   // --- CARREGAMENTO DE DADOS ---
@@ -183,51 +213,15 @@ export default function App() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/products`);
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(Array.isArray(data) ? data : []);
-      }
+      if (res.ok) { const data = await res.json(); setProducts(Array.isArray(data) ? data : []); }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  const loadOrders = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/admin/orders`);
-      if (res.status === 403) { setIsAuthorized(false); return; }
-      
-      const data = await res.json();
-      const treatedData = Array.isArray(data) ? data.map((o: any) => {
-          const orderDate = new Date(o.created_at).getTime();
-          const now = new Date().getTime();
-          const hoursDiff = (now - orderDate) / (1000 * 3600);
-          
-          let statusFinal = o.status;
-          if (o.status === 'pending' && hoursDiff > 24) statusFinal = 'cancelled';
-
-          let parsedItems = [];
-          try { parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items; } catch (err) { parsedItems = []; }
-          if (!Array.isArray(parsedItems)) parsedItems = [];
-
-          return { ...o, status: statusFinal, items: parsedItems };
-      }) : [];
-
-      setOrders(treatedData);
-    } catch (e) { console.error("Erro ao carregar vendas:", e); }
-  };
-
-  const loadIps = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/allowed-ips`);
-      if (res.status === 403) { setIsAuthorized(false); return; }
-      const data = await res.json();
-      setIps(Array.isArray(data) ? data : []);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
-
-  // NOVA FUNÇÃO: Carregar Configurações do Site
+  const loadOrders = async () => { try { const res = await fetch(`${API_URL}/api/admin/orders`); if(res.ok) { const data = await res.json(); setOrders(data); } } catch {} };
+  const loadIps = async () => { try { const res = await fetch(`${API_URL}/api/allowed-ips`); if(res.ok) { const data = await res.json(); setIps(data); } } catch {} };
+  
+  // Carregar Configurações do Site (CMS)
   const loadSiteConfig = async () => {
       try {
           const res = await fetch(`${API_URL}/api/site-config`);
@@ -239,112 +233,69 @@ export default function App() {
       } catch (e) { console.error("Erro config site", e); }
   };
 
-  // Hook unificado para carregar dados conforme a tela
-  useEffect(() => {
-    if (!isAuthorized) return;
-    if (view === 'PRODUCTS') loadProducts();
-    if (view === 'SECURITY') loadIps();
-    // Se for a tela de configuração, carrega produtos (para a lista) e a config
-    if (view === 'SITE_CONFIG') {
-        loadProducts();
-        loadSiteConfig();
-    }
+  useEffect(() => { 
+      if (isAuthorized) { 
+          if (view === 'PRODUCTS') loadProducts(); 
+          if (view === 'SECURITY') loadIps(); 
+          if (view === 'SITE_CONFIG') { loadProducts(); loadSiteConfig(); } 
+      } 
   }, [view, isAuthorized]);
 
   // --- HANDLERS (AÇÕES) ---
-
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const priceString = String(prodForm.price).replace(',', '.');
-    const abvString = String(prodForm.abv).replace(',', '.');
-    const priceFinal = parseFloat(priceString);
-    const abvFinal = parseFloat(abvString);
-
-    if (isNaN(priceFinal) || isNaN(abvFinal)) {
-        alert("Erro: O preço e o teor alcoólico devem ser números válidos.");
-        return;
-    }
-
     const payload = { 
         ...prodForm, 
-        price: priceFinal, 
-        abv: abvFinal,
-        stock_quantity: Number(prodForm.stock_quantity)
+        price: parseFloat(String(prodForm.price).replace(',', '.')), 
+        abv: parseFloat(String(prodForm.abv).replace(',', '.')), 
+        stock_quantity: Number(prodForm.stock_quantity) 
     };
-    
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId ? `${API_URL}/api/products/${editingId}` : `${API_URL}/api/products`;
-
-    try {
-      const res = await fetch(url, { 
-        method, 
-        headers: {'Content-Type': 'application/json'}, 
-        body: JSON.stringify(payload) 
-      });
-
-      if (res.status === 403) { setIsAuthorized(false); return; }
-
-      if (res.ok) { 
-          await loadProducts(); 
-          if (!editingId) handleCreateProd();
-          setView('PRODUCTS');
-      } else { 
-          try {
-              const errorData = await res.json();
-              alert('Erro do Servidor: ' + (errorData.error || errorData.message));
-          } catch (jsonError) { alert('Erro ao salvar produto.'); }
-      }
-    } catch (e) { alert('Erro de conexão.'); }
+    try { 
+        const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); 
+        if (res.ok) { 
+            await loadProducts(); 
+            setView('PRODUCTS'); 
+            if (!editingId) handleCreateProd(); 
+        } else alert('Erro ao salvar'); 
+    } catch { alert('Erro conexão'); }
   };
 
-  const persistStock = async (id: string, newQuantity: number) => {
-    try {
-        const res = await fetch(`${API_URL}/api/products/${id}/stock`, {
-            method: 'PATCH',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ quantity: newQuantity })
-        });
-        if (!res.ok) throw new Error();
-    } catch (e) {
-        console.error("Erro ao salvar estoque", e);
-        loadProducts(); 
-    }
+  const persistStock = async (id: string, newQuantity: number) => { 
+      try { 
+          await fetch(`${API_URL}/api/products/${id}/stock`, { 
+              method: 'PATCH', 
+              headers: {'Content-Type': 'application/json'}, 
+              body: JSON.stringify({ quantity: newQuantity }) 
+          }); 
+      } catch (e) { loadProducts(); } 
+  };
+  
+  const updateStock = (id: string, current: number, change: number) => { 
+      const n = Math.max(0, current + change); 
+      setProducts(prev => prev.map(p => p.id === id ? {...p, stock_quantity: n} : p)); 
+      persistStock(id, n); 
+  };
+  
+  const handleManualStock = (id: string, v: string) => { 
+      const n = parseInt(v); 
+      if (!isNaN(n)) setProducts(prev => prev.map(p => p.id === id ? {...p, stock_quantity: n} : p)); 
   };
 
-  const updateStock = (id: string, currentStock: number, change: number) => {
-    const newStock = Math.max(0, currentStock + change);
-    setProducts(products.map(p => p.id === id ? {...p, stock_quantity: newStock} : p));
-    persistStock(id, newStock);
+  const handleEditProd = (p: Product) => { 
+      setEditingId(p.id); 
+      setProdForm({ name: p.name, description: p.description, price: String(p.price), packaging: p.packaging, type: p.type, imageUrl: p.image_url, abv: String(p.abv), volume: p.volume, stock_quantity: String(p.stock_quantity) }); 
+      setView('PROD_FORM'); 
+      setIsSidebarOpen(false); 
   };
-
-  const handleManualStockChange = (id: string, value: string) => {
-      const newStock = parseInt(value);
-      if (isNaN(newStock)) return; 
-      setProducts(products.map(p => p.id === id ? {...p, stock_quantity: newStock} : p));
-  };
-
-  const handleEditProd = (p: Product) => {
-    setEditingId(p.id);
-    setProdForm({
-      name: p.name, description: p.description, price: String(p.price),
-      packaging: p.packaging, type: p.type, imageUrl: p.image_url,
-      abv: String(p.abv), volume: p.volume, stock_quantity: String(p.stock_quantity)
-    });
-    setView('PROD_FORM');
-    setIsSidebarOpen(false);
-  };
-
-  const handleCreateProd = () => {
-    setEditingId(null);
-    setProdForm({
-        name: '', description: '', price: '', packaging: 'Garrafa PET',
-        type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L',
-        stock_quantity: '0'
-    });
-    setView('PROD_FORM');
+  
+  const handleCreateProd = () => { 
+      setEditingId(null); 
+      setProdForm({ name: '', description: '', price: '', packaging: 'Garrafa PET', type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L', stock_quantity: '0' }); 
+      setView('PROD_FORM'); 
   }
-
-  // NOVO HANDLER: Salvar Configurações do Site
+  
   const handleSaveSiteConfig = async (e: React.FormEvent) => {
       e.preventDefault();
       try {
@@ -358,7 +309,6 @@ export default function App() {
       } catch (e) { alert('Erro de conexão'); }
   };
 
-  // NOVO HANDLER: Marcar/Desmarcar produto destaque
   const toggleHighlight = (productId: string) => {
       setSiteConfig(prev => {
           const ids = prev.highlight_ids || [];
@@ -367,105 +317,29 @@ export default function App() {
       });
   };
 
-  const handleSaveIp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_URL}/api/allowed-ips`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc })
-      });
-      if (res.status === 403) { setIsAuthorized(false); return; }
-      setIpForm({ ip: '', desc: '' });
-      loadIps();
-    } catch (e) { alert('Erro ao salvar IP.'); }
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteModal.id) return;
-    try {
-      let url = deleteModal.type === 'PROD' 
-        ? `${API_URL}/api/products/${deleteModal.id}`
-        : `${API_URL}/api/allowed-ips/${deleteModal.id}`;
-
-      const res = await fetch(url, { method: 'DELETE' });
-      if (res.status === 403) { setIsAuthorized(false); return; }
-      
-      if (deleteModal.type === 'PROD') loadProducts();
-      else loadIps();
-      
-      setDeleteModal({ open: false, type: null, id: null });
-    } catch (e) { alert('Erro ao excluir.'); }
-  };
-
-  const formatMoney = (val: string | number) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const formatDate = (date: string) => {
-    try { return new Date(date).toLocaleDateString('pt-BR') + ' às ' + new Date(date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}); } catch { return date; }
-  };
+  const handleSaveIp = async (e: React.FormEvent) => { e.preventDefault(); try { await fetch(`${API_URL}/api/allowed-ips`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc }) }); setIpForm({ ip: '', desc: '' }); loadIps(); } catch { alert('Erro salvar IP'); } };
+  const confirmDelete = async () => { if (!deleteModal.id) return; try { const url = deleteModal.type === 'PROD' ? `${API_URL}/api/products/${deleteModal.id}` : `${API_URL}/api/allowed-ips/${deleteModal.id}`; await fetch(url, { method: 'DELETE' }); if (deleteModal.type === 'PROD') loadProducts(); else loadIps(); setDeleteModal({ open: false, type: null, id: null }); } catch { alert('Erro excluir'); } };
   
-  const getStatusStyle = (st: string) => {
-    switch(st) {
-      case 'paid': return 'bg-green-100 text-green-700 border-green-200';
-      case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-gray-100 text-gray-600 border-gray-200';
-    }
-  };
-  
-  const translateStatus = (st: string) => {
-    const map: any = { 'paid': 'Pago', 'pending': 'Pendente', 'cancelled': 'Cancelado' };
-    return map[st] || st;
-  };
-  
+  const formatMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
   const preventNonNumeric = (e: React.KeyboardEvent) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault(); };
 
-  if (isCheckingAuth) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
-        <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
-        <p className="text-slate-500 font-medium animate-pulse">Verificando segurança...</p>
-      </div>
-    );
-  }
-
-  if (!isAuthorized) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-100 p-4">
-        <div className="bg-white max-w-md w-full p-8 rounded-2xl shadow-xl border border-slate-200 text-center">
-          <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Lock className="w-10 h-10 text-red-500" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Área Restrita</h1>
-          <p className="text-slate-500 mb-8">Acesso não autorizado. Contate o administrador.</p>
-          <div className="border-t border-slate-100 pt-6">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">&copy; 2025 Celeiro da Cachaça</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (isCheckingAuth) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-10 h-10 text-yellow-500 animate-spin" /></div>;
+  if (!isAuthorized) return <div className="h-screen flex items-center justify-center bg-slate-100 p-4"><div className="bg-white p-8 rounded-2xl shadow-xl text-center"><Lock className="w-10 h-10 text-red-500 mx-auto mb-4" /><h1 className="text-2xl font-bold text-slate-800">Acesso Negado</h1><p className="text-slate-500 mt-2">IP não autorizado.</p></div></div>;
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
-      {/* HEADER MOBILE */}
+      {/* SIDEBAR */}
       <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg z-20 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-            <span className="font-bold text-yellow-500 text-lg tracking-wide">Celeiro Admin</span>
-        </div>
-        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-            {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center gap-3"><span className="font-bold text-yellow-500 text-lg tracking-wide">Celeiro Admin</span></div>
+        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors"><Menu size={24} /></button>
       </div>
-
       {isSidebarOpen && <div className="fixed inset-0 bg-black/60 z-20 md:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>}
 
-      {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-30 w-72 bg-slate-900 text-white flex flex-col shadow-2xl transition-transform duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} border-r border-slate-800`}>
         <div className="p-8 hidden md:flex flex-col items-center border-b border-slate-800 bg-slate-900/50">
-          <div className="bg-amber-50 p-3 rounded-2xl mb-4 shadow-lg shadow-yellow-500/10 hover:scale-105 transition-transform duration-300">
-            <img src="https://i.imgur.com/Q3oTWj1.png" className="w-20 h-auto object-contain" alt="logo"/>
-          </div>
+          <div className="bg-amber-50 p-3 rounded-2xl mb-4 shadow-lg shadow-yellow-500/10 hover:scale-105 transition-transform duration-300"><img src="https://i.imgur.com/Q3oTWj1.png" className="w-20 h-auto object-contain" alt="logo"/></div>
           <h1 className="text-xl font-bold text-yellow-500 flex items-center gap-2">Celeiro Admin</h1>
           <p className="text-xs text-slate-500 mt-2 font-medium bg-slate-800 px-3 py-1 rounded-full">Online</p>
         </div>
@@ -474,7 +348,7 @@ export default function App() {
           {[
             { id: 'PRODUCTS', icon: LayoutDashboard, label: 'Produtos' },
             { id: 'SALES', icon: ShoppingBag, label: 'Vendas' },
-            { id: 'SITE_CONFIG', icon: Palette, label: 'Personalizar Site' }, // NOVA OPÇÃO
+            { id: 'SITE_CONFIG', icon: Palette, label: 'Marketing & Site' }, // NOVA OPÇÃO
             { id: 'SECURITY', icon: Shield, label: 'Segurança' },
             { id: 'LOGS', icon: Terminal, label: 'Logs' }
           ].map(item => (
@@ -485,9 +359,7 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="p-6 border-t border-slate-800 bg-slate-950/30 text-center">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">&copy; 2025 Celeiro da Cachaça</p>
-        </div>
+        <div className="p-6 border-t border-slate-800 bg-slate-950/30 text-center"><p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">&copy; 2025 Celeiro da Cachaça</p></div>
       </aside>
 
       {/* MAIN CONTENT */}
@@ -498,46 +370,23 @@ export default function App() {
         {view === 'PRODUCTS' && (
           <div className="animate-enter">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-              <div>
-                <h2 className="text-3xl font-bold text-slate-800">Estoque</h2>
-                <p className="text-slate-500 mt-1">Gerencie o catálogo de produtos do site.</p>
-              </div>
-              <button onClick={handleCreateProd} className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-green-600/20 active:scale-95 transition-all">
-                <PlusCircle size={20} /> Novo Produto
-              </button>
+              <div><h2 className="text-3xl font-bold text-slate-800">Estoque</h2><p className="text-slate-500 mt-1">Gerencie o catálogo de produtos.</p></div>
+              <button onClick={handleCreateProd} className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg active:scale-95 transition-all"><PlusCircle size={20} /> Novo Produto</button>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                  <input type="text" placeholder="Buscar por nome, tipo..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none transition-all" 
-                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                </div>
-              </div>
+              <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex gap-4"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Buscar por nome, tipo..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div></div>
               
               <div className="overflow-x-auto">
                 <table className="w-full text-left min-w-[800px]">
-                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold tracking-wider">
-                    <tr>
-                      <th className="px-6 py-4">Produto</th>
-                      <th className="px-6 py-4">Estoque</th>
-                      <th className="px-6 py-4">Preço</th>
-                      <th className="px-6 py-4 text-right">Ações</th>
-                    </tr>
-                  </thead>
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold tracking-wider"><tr><th className="px-6 py-4">Produto</th><th className="px-6 py-4">Estoque</th><th className="px-6 py-4">Preço</th><th className="px-6 py-4 text-right">Ações</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {products.filter(p=>p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
                       <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-6 py-3">
                             <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-1 shadow-sm">
-                                    <img src={p.image_url} className="w-full h-full object-contain" alt="" />
-                                </div>
-                                <div>
-                                    <span className="font-semibold text-slate-700 block">{p.name}</span>
-                                    <span className="text-xs text-slate-400">{p.packaging}</span>
-                                </div>
+                                <div className="w-12 h-12 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-1 shadow-sm"><img src={p.image_url} className="w-full h-full object-contain" alt="" /></div>
+                                <div><span className="font-semibold text-slate-700 block">{p.name}</span><span className="text-xs text-slate-400">{p.packaging}</span></div>
                             </div>
                         </td>
                         <td className="px-6 py-3">
@@ -563,62 +412,84 @@ export default function App() {
           </div>
         )}
 
-        {/* --- NOVA ABA: PERSONALIZAR SITE --- */}
+        {/* --- VIEW: SITE CONFIG (CMS) --- */}
         {view === 'SITE_CONFIG' && (
-            <div className="animate-enter max-w-5xl mx-auto">
-                <div className="flex justify-between items-center mb-8">
-                    <div><h2 className="text-3xl font-bold text-slate-800">Personalizar Site</h2><p className="text-slate-500">Altere textos e produtos em destaque.</p></div>
-                    <button onClick={handleSaveSiteConfig} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-all"><Save size={20}/> Publicar Alterações</button>
+            <div className="animate-enter max-w-6xl mx-auto pb-20">
+                <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div>
+                        <h2 className="text-3xl font-bold text-slate-800 flex items-center gap-3"><Palette className="text-purple-600"/> Personalizar Site</h2>
+                        <p className="text-slate-500 mt-1">Gerencie campanhas sazonais e banners de benefícios em tempo real.</p>
+                    </div>
+                    <button onClick={handleSaveSiteConfig} className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> Publicar no Site</button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Banner Principal */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div className="flex items-center gap-2 mb-4 text-slate-800 font-bold text-lg"><LayoutDashboard className="text-yellow-500"/> Banner Promocional</div>
-                        <div className="space-y-4">
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Etiqueta (ex: Oferta Exclusiva)</label><input className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" value={siteConfig.banner_tag} onChange={e => setSiteConfig({...siteConfig, banner_tag: e.target.value})} /></div>
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título Principal</label><input className="w-full p-3 border rounded-xl font-serif text-lg outline-none focus:border-blue-500" value={siteConfig.banner_title} onChange={e => setSiteConfig({...siteConfig, banner_title: e.target.value})} /></div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+                    {/* BANNER DE BENEFÍCIOS */}
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col h-full">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                            <div className="p-2 bg-yellow-100 text-yellow-700 rounded-lg"><LayoutDashboard size={24}/></div>
+                            <h3 className="font-bold text-xl text-slate-800">Banner de Benefícios</h3>
+                        </div>
+                        <div className="space-y-5 flex-1">
+                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Etiqueta (Ex: Oferta Exclusiva)</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 outline-none transition-all" value={siteConfig.banner_tag} onChange={e => setSiteConfig({...siteConfig, banner_tag: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Título Principal</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-serif text-lg focus:border-yellow-500 outline-none transition-all" value={siteConfig.banner_title} onChange={e => setSiteConfig({...siteConfig, banner_title: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">URL da Imagem (Ícone/Ilustração)</label><div className="flex gap-2"><input className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 outline-none text-sm" placeholder="https://..." value={siteConfig.banner_image} onChange={e => setSiteConfig({...siteConfig, banner_image: e.target.value})} /><div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 overflow-hidden">{siteConfig.banner_image ? <img src={siteConfig.banner_image} className="w-full h-full object-cover"/> : <ImageIcon size={20} className="text-gray-400"/>}</div></div></div>
+                        </div>
+                        <div className="mt-8 pt-6 border-t border-gray-100">
+                            <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Eye size={14}/> Pré-visualização</p>
+                            <BannerPreview config={siteConfig} />
                         </div>
                     </div>
 
-                    {/* Título Seção Especial */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div className="flex items-center gap-2 mb-4 text-slate-800 font-bold text-lg"><Package className="text-green-600"/> Seção de Destaque</div>
-                        <div className="space-y-4">
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Etiqueta (ex: Edição Especial)</label><input className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" value={siteConfig.section_tag} onChange={e => setSiteConfig({...siteConfig, section_tag: e.target.value})} /></div>
-                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título da Seção</label><input className="w-full p-3 border rounded-xl font-serif text-lg outline-none focus:border-blue-500" value={siteConfig.section_title} onChange={e => setSiteConfig({...siteConfig, section_title: e.target.value})} /></div>
+                    {/* DESTAQUE SAZONAL */}
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col h-full">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                            <div className="p-2 bg-green-100 text-green-700 rounded-lg"><Package size={24}/></div>
+                            <h3 className="font-bold text-xl text-slate-800">Destaque Sazonal</h3>
+                        </div>
+                        <div className="space-y-5 flex-1">
+                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Etiqueta (Ex: Páscoa, Natal)</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-green-500 outline-none transition-all" value={siteConfig.section_tag} onChange={e => setSiteConfig({...siteConfig, section_tag: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Título da Seção</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-serif text-lg focus:border-green-500 outline-none transition-all" value={siteConfig.section_title} onChange={e => setSiteConfig({...siteConfig, section_title: e.target.value})} /></div>
+                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">URL da Imagem (Tema/Ícone)</label><div className="flex gap-2"><input className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-green-500 outline-none text-sm" placeholder="https://..." value={siteConfig.section_image} onChange={e => setSiteConfig({...siteConfig, section_image: e.target.value})} /><div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 overflow-hidden">{siteConfig.section_image ? <img src={siteConfig.section_image} className="w-full h-full object-cover"/> : <ImageIcon size={20} className="text-gray-400"/>}</div></div></div>
+                        </div>
+                        <div className="mt-8 pt-6 border-t border-gray-100">
+                            <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Eye size={14}/> Pré-visualização</p>
+                            <SectionPreview config={siteConfig} products={products} />
                         </div>
                     </div>
                 </div>
 
-                {/* Seleção de Produtos */}
-                <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-lg text-slate-800 mb-4">Selecionar Produtos em Destaque</h3>
-                    <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded-xl custom-scrollbar">
+                {/* SELEÇÃO DE PRODUTOS */}
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-xl text-slate-800">Selecionar Produtos para o Destaque Sazonal</h3>
+                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">{siteConfig.highlight_ids.length} selecionados</span>
+                    </div>
+                    <div className="h-96 overflow-y-auto border border-gray-200 rounded-2xl custom-scrollbar">
                         <table className="w-full text-left">
-                            <thead className="bg-slate-50 text-xs uppercase font-bold text-slate-500 sticky top-0"><tr><th className="p-4">Selecionar</th><th className="p-4">Produto</th><th className="p-4">Preço</th></tr></thead>
-                            <tbody className="divide-y">
+                            <thead className="bg-gray-50 text-xs uppercase font-bold text-slate-500 sticky top-0 z-10 shadow-sm"><tr><th className="p-4">Status</th><th className="p-4">Produto</th><th className="p-4">Categoria</th><th className="p-4 text-right">Preço</th></tr></thead>
+                            <tbody className="divide-y divide-gray-100">
                                 {products.map(p => {
                                     const isSelected = siteConfig.highlight_ids?.includes(p.id);
                                     return (
-                                        <tr key={p.id} className={`hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50/50' : ''}`} onClick={() => toggleHighlight(p.id)}>
+                                        <tr key={p.id} onClick={() => toggleHighlight(p.id)} className={`hover:bg-blue-50/30 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/50' : ''}`}>
                                             <td className="p-4">
-                                                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 text-transparent'}`}>
-                                                    <CheckSquare size={16} />
+                                                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white scale-110' : 'border-gray-300 text-transparent hover:border-blue-400'}`}>
+                                                    <CheckSquare size={16} strokeWidth={3} />
                                                 </div>
                                             </td>
-                                            <td className="p-4 flex items-center gap-3">
-                                                <img src={p.image_url} className="w-10 h-10 object-contain rounded bg-white border" />
-                                                <span className={isSelected ? 'font-bold text-blue-700' : 'text-slate-700'}>{p.name}</span>
+                                            <td className="p-4 flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-white rounded-lg border border-gray-100 p-1"><img src={p.image_url} className="w-full h-full object-contain" /></div>
+                                                <span className={`font-medium ${isSelected ? 'text-blue-700' : 'text-slate-700'}`}>{p.name}</span>
                                             </td>
-                                            <td className="p-4 text-slate-600">{formatMoney(p.price)}</td>
+                                            <td className="p-4"><span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md font-bold">{p.type}</span></td>
+                                            <td className="p-4 text-right text-slate-600 font-mono">{formatMoney(p.price)}</td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                         </table>
                     </div>
-                    <p className="text-xs text-slate-500 mt-2 text-right">Mostrando {siteConfig.highlight_ids?.length || 0} produtos na seção de destaque.</p>
                 </div>
             </div>
         )}
@@ -627,38 +498,19 @@ export default function App() {
         {view === 'SALES' && (
           <div className="animate-enter pb-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-              <div>
-                <h2 className="text-3xl font-bold text-slate-800">Vendas</h2>
-                <p className="text-slate-500 mt-1">Acompanhamento de pedidos em tempo real.</p>
-              </div>
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm animate-pulse">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full"></span> ATUALIZANDO AO VIVO
-              </div>
+              <div><h2 className="text-3xl font-bold text-slate-800">Vendas</h2><p className="text-slate-500 mt-1">Acompanhamento de pedidos em tempo real.</p></div>
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm animate-pulse"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span> ATUALIZANDO AO VIVO</div>
             </div>
             <div className="grid gap-6">
               {orders.map(o => (
                 <div key={o.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300">
                   <div className="bg-slate-50/80 p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">#{o.id}</div>
-                      <div><p className="text-sm font-medium text-slate-700">{formatDate(o.created_at)}</p></div>
-                    </div>
+                    <div className="flex items-center gap-4"><div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">#{o.id}</div><div><p className="text-sm font-medium text-slate-700">{formatDate(o.created_at)}</p></div></div>
                     <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(o.status)}`}>{translateStatus(o.status)}</div>
                   </div>
                   <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="space-y-6">
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><User size={14}/> Cliente</h4>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2"><p className="font-bold text-slate-800 text-lg">{o.full_name}</p><div className="space-y-1"><p className="text-slate-500 text-sm flex items-center gap-2"><Mail size={14}/> {o.email}</p><p className="text-slate-500 text-sm flex items-center gap-2"><Phone size={14}/> {o.phone}</p></div></div>
-                      </div>
-                    </div>
-                    <div className="lg:col-span-2 flex flex-col h-full">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><Package size={14}/> Itens</h4>
-                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
-                        {Array.isArray(o.items) && o.items.length > 0 ? (<div className="overflow-x-auto"><table className="w-full text-left text-sm"><tbody className="divide-y divide-slate-100">{o.items.map((item, idx) => (<tr key={idx} className="hover:bg-slate-50/50"><td className="p-3 pl-4"><span className="font-medium text-slate-700">{item.name}</span></td><td className="p-3 text-center"><span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span></td><td className="p-3 text-right pr-4 font-medium text-slate-600">{formatMoney(Number(item.unit_price) * Number(item.quantity))}</td></tr>))}</tbody></table></div>) : (<div className="p-8 text-center text-slate-400">Detalhes indisponíveis.</div>)}
-                      </div>
-                      <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center"><span className="text-green-800 text-sm font-bold uppercase tracking-wide">Total</span><div className="flex items-center gap-1 text-2xl font-extrabold text-green-600"><DollarSign size={20} className="mt-1"/>{formatMoney(o.total_amount)}</div></div>
-                    </div>
+                    <div className="space-y-6"><div><h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><User size={14}/> Cliente</h4><div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2"><p className="font-bold text-slate-800 text-lg">{o.full_name}</p><div className="space-y-1"><p className="text-slate-500 text-sm flex items-center gap-2"><Mail size={14}/> {o.email}</p><p className="text-slate-500 text-sm flex items-center gap-2"><Phone size={14}/> {o.phone}</p></div></div></div></div>
+                    <div className="lg:col-span-2 flex flex-col h-full"><h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><Package size={14}/> Itens</h4><div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">{Array.isArray(o.items) && o.items.length > 0 ? (<div className="overflow-x-auto"><table className="w-full text-left text-sm"><tbody className="divide-y divide-slate-100">{o.items.map((item, idx) => (<tr key={idx} className="hover:bg-slate-50/50"><td className="p-3 pl-4"><span className="font-medium text-slate-700">{item.name}</span></td><td className="p-3 text-center"><span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span></td><td className="p-3 text-right pr-4 font-medium text-slate-600">{formatMoney(Number(item.unit_price) * Number(item.quantity))}</td></tr>))}</tbody></table></div>) : (<div className="p-8 text-center text-slate-400">Detalhes indisponíveis.</div>)}</div><div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center"><span className="text-green-800 text-sm font-bold uppercase tracking-wide">Total</span><div className="flex items-center gap-1 text-2xl font-extrabold text-green-600"><DollarSign size={20} className="mt-1"/>{formatMoney(o.total_amount)}</div></div></div>
                   </div>
                 </div>
               ))}
@@ -718,7 +570,7 @@ export default function App() {
                     <div className="col-span-1 md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-1">URL da Imagem</label><div className="flex flex-col md:flex-row gap-4 items-start"><input className="flex-1 w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>{prodForm.imageUrl && (<div className="w-40 h-40 shrink-0 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 shadow-sm overflow-hidden"><img src={prodForm.imageUrl} className="w-full h-full object-contain" alt="Preview" onError={(e) => e.currentTarget.style.display = 'none'} /></div>)}</div></div>
                     <div className="col-span-1 md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label><textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none focus:border-yellow-500" value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/></div>
                  </div>
-                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={20}/> Salvar e Fechar</button>
+                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={20}/> Salvar e Fechar</button>
                </form>
              </div>
           </div>
