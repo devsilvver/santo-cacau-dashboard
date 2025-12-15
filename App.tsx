@@ -73,14 +73,13 @@ interface Order {
 interface AllowedIp { id: number; ip_address: string; description: string; created_at: string; }
 interface LogMessage { type: string; ip: string; timestamp: string; message: string; }
 
-// Adicione esta interface
+// --- NOVAS INTERFACES DO CMS ---
 interface HeroSlide {
     image: string;
     title: string;
     subtitle: string;
 }
 
-// INTERFACE ATUALIZADA DO CMS
 interface SiteConfig {
     banner_tag: string;
     banner_title: string;
@@ -91,10 +90,54 @@ interface SiteConfig {
     section_title: string;
     section_image: string;
     highlight_ids: string[];
-    hero_slides: HeroSlide[];
+    hero_slides: HeroSlide[]; // Novo campo para o carrossel
 }
 
-// --- COMPONENTES DE PRÉ-VISUALIZAÇÃO (SIMULAÇÃO DO SITE) ---
+// --- COMPONENTES DE PRÉ-VISUALIZAÇÃO ---
+
+const CarouselPreview = ({ slides }: { slides: HeroSlide[] }) => {
+    const [current, setCurrent] = useState(0);
+
+    // Efeito de rotação automática no preview
+    useEffect(() => {
+        if (slides.length <= 1) return;
+        const timer = setInterval(() => setCurrent(c => (c + 1) % slides.length), 3000);
+        return () => clearInterval(timer);
+    }, [slides]);
+
+    const slide = slides[current] || { image: '', title: 'Preview', subtitle: '...' };
+
+    return (
+        <div className="w-full aspect-video bg-slate-900 rounded-xl overflow-hidden relative group border border-slate-200 shadow-sm">
+            {/* Imagem de Fundo */}
+            {slide.image ? (
+                <img src={slide.image} className="w-full h-full object-cover opacity-70 transition-all duration-700" alt="Slide" onError={(e) => e.currentTarget.style.display = 'none'} />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-600 bg-slate-100 flex-col gap-2">
+                    <ImageIcon size={32} />
+                    <span className="text-xs">Sem Imagem</span>
+                </div>
+            )}
+            
+            {/* Texto Sobreposto */}
+            <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-12 text-white z-10 bg-gradient-to-r from-black/60 to-transparent">
+                <h2 className="text-xl md:text-3xl font-serif font-bold mb-2 drop-shadow-lg leading-tight max-w-[80%]">
+                    {slide.title || 'Título do Slide'}
+                </h2>
+                <p className="text-xs md:text-sm opacity-90 drop-shadow-md font-light max-w-[70%]">
+                    {slide.subtitle || 'Subtítulo descritivo.'}
+                </p>
+            </div>
+
+            {/* Indicadores (Bolinhas) */}
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-20">
+                {slides.map((_, idx) => (
+                    <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === current ? 'bg-white w-6' : 'bg-white/40 w-1.5'}`} />
+                ))}
+            </div>
+        </div>
+    );
+};
 
 const BannerPreview = ({ config }: { config: SiteConfig }) => (
     <div 
@@ -104,10 +147,7 @@ const BannerPreview = ({ config }: { config: SiteConfig }) => (
             backgroundImage: config.banner_bg_image ? `url(${config.banner_bg_image})` : 'none'
         }}
     >
-        {/* Overlay escuro para garantir leitura se tiver imagem de fundo */}
         {config.banner_bg_image && <div className="absolute inset-0 bg-black/40 z-0"></div>}
-
-        {/* Efeito de luz padrão se não tiver imagem */}
         {!config.banner_bg_image && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-[60px]"></div>}
         
         <div className="relative z-10 text-left max-w-sm">
@@ -136,7 +176,6 @@ const BannerPreview = ({ config }: { config: SiteConfig }) => (
 
 const SectionPreview = ({ config, products }: { config: SiteConfig, products: Product[] }) => {
     const previewProducts = products.filter(p => config.highlight_ids.includes(p.id)).slice(0, 2);
-    
     return (
         <div className="w-full bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
             <div className="flex items-center gap-4 mb-6">
@@ -152,7 +191,6 @@ const SectionPreview = ({ config, products }: { config: SiteConfig, products: Pr
                     </h2>
                 </div>
             </div>
-            
             <div className="grid grid-cols-2 gap-3">
                 {previewProducts.length > 0 ? previewProducts.map(p => (
                     <div key={p.id} className="aspect-[3/4] bg-gray-50 rounded-xl border border-gray-100 flex flex-col items-center justify-center p-2 text-center relative overflow-hidden">
@@ -172,44 +210,9 @@ const SectionPreview = ({ config, products }: { config: SiteConfig, products: Pr
     );
 };
 
-const CarouselPreview = ({ slides }: { slides: HeroSlide[] }) => {
-    const [current, setCurrent] = useState(0);
-    // Avança o slide automaticamente no preview
-    useEffect(() => {
-        if (slides.length <= 1) return;
-        const timer = setInterval(() => setCurrent(c => (c + 1) % slides.length), 3000);
-        return () => clearInterval(timer);
-    }, [slides]);
-
-    const slide = slides[current] || { image: '', title: 'Exemplo', subtitle: 'Subtítulo' };
-
-    return (
-        <div className="w-full aspect-video bg-gray-900 rounded-xl overflow-hidden relative group border border-gray-200 shadow-sm">
-            {slide.image ? (
-                <img src={slide.image} className="w-full h-full object-cover opacity-60 transition-all duration-700" alt="Preview" />
-            ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-600 bg-gray-100">Sem Imagem</div>
-            )}
-            
-            <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-16 text-white z-10">
-                <h2 className="text-2xl md:text-3xl font-serif font-bold mb-2 drop-shadow-lg">{slide.title}</h2>
-                <p className="text-sm md:text-base opacity-90 drop-shadow-md">{slide.subtitle}</p>
-            </div>
-
-            {/* Indicadores */}
-            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-20">
-                {slides.map((_, idx) => (
-                    <div key={idx} className={`h-1.5 rounded-full transition-all ${idx === current ? 'bg-white w-6' : 'bg-white/40 w-1.5'}`} />
-                ))}
-            </div>
-        </div>
-    );
-};
-
 export default function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
-
   const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY' | 'LOGS' | 'SITE_CONFIG'>('PRODUCTS');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -230,6 +233,7 @@ export default function App() {
       section_title: '', 
       section_image: '',
       highlight_ids: [],
+      // ESTADO INICIAL PREENCHIDO (Pode ser editado/removido na dashboard)
       hero_slides: [
           { 
               image: "https://i.imgur.com/kBnu4IB.jpeg", 
@@ -239,7 +243,6 @@ export default function App() {
       ]
   });
 
-  // ADICIONE ESTA FUNÇÃO HELPER:
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
       const id = Date.now();
       setToasts(prev => [...prev, { id, message, type }]);
@@ -306,6 +309,18 @@ export default function App() {
           if (res.ok) {
               const data = await res.json();
               if (typeof data.highlight_ids === 'string') data.highlight_ids = JSON.parse(data.highlight_ids);
+              // Parse dos slides se vier como string do banco
+              if (typeof data.hero_slides === 'string') data.hero_slides = JSON.parse(data.hero_slides);
+              
+              // Se vier vazio do banco (null ou array vazio), mantém o estado inicial (Figo) para não quebrar a primeira vez
+              // Mas se vier um array preenchido, usa ele.
+              if (data.hero_slides && Array.isArray(data.hero_slides) && data.hero_slides.length > 0) {
+                  // Usa o que vem do banco
+              } else {
+                  // Se o banco não tem slides, usa o padrão do Figo que já está no useState
+                  data.hero_slides = siteConfig.hero_slides;
+              }
+
               setSiteConfig(data);
           }
       } catch (e) { console.error("Erro config site", e); }
@@ -327,7 +342,7 @@ export default function App() {
     const abvFinal = parseFloat(abvString);
 
     if (isNaN(priceFinal) || isNaN(abvFinal)) {
-        showToast("O preço e o teor alcoólico devem ser números válidos.", "warning"); // <--- AQUI
+        showToast("O preço e o teor alcoólico devem ser números válidos.", "warning"); 
         return;
     }
 
@@ -343,21 +358,21 @@ export default function App() {
           await loadProducts(); 
           if (!editingId) handleCreateProd();
           setView('PRODUCTS');
-          showToast(editingId ? "Produto atualizado com sucesso!" : "Produto criado com sucesso!", "success"); // <--- AQUI
+          showToast(editingId ? "Produto atualizado com sucesso!" : "Produto criado com sucesso!", "success");
       } else { 
           const errorData = await res.json();
-          showToast('Erro: ' + (errorData.error || errorData.message), "error"); // <--- AQUI
+          showToast('Erro: ' + (errorData.error || errorData.message), "error");
       }
-    } catch (e) { showToast('Erro de conexão com o servidor.', "error"); } // <--- AQUI
+    } catch (e) { showToast('Erro de conexão com o servidor.', "error"); }
   };
 
   const persistStock = async (id: string, newQuantity: number) => {
     try {
         const res = await fetch(`${API_URL}/api/products/${id}/stock`, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ quantity: newQuantity }) });
         if (!res.ok) throw new Error();
-        showToast("Estoque atualizado.", "success"); // <--- AQUI
+        showToast("Estoque atualizado.", "success");
     } catch (e) {
-        showToast("Erro ao salvar estoque.", "error"); // <--- AQUI
+        showToast("Erro ao salvar estoque.", "error");
         loadProducts(); 
     }
   };
@@ -390,9 +405,9 @@ export default function App() {
       e.preventDefault();
       try {
           const res = await fetch(`${API_URL}/api/site-config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(siteConfig) });
-          if (res.ok) showToast('Site atualizado com sucesso!', 'success'); // <--- AQUI
-          else showToast('Erro ao atualizar site.', 'error'); // <--- AQUI
-      } catch (e) { showToast('Erro de conexão.', 'error'); } // <--- AQUI
+          if (res.ok) showToast('Site atualizado com sucesso!', 'success');
+          else showToast('Erro ao atualizar site.', 'error');
+      } catch (e) { showToast('Erro de conexão.', 'error'); }
   };
 
   const toggleHighlight = (productId: string) => {
@@ -410,8 +425,8 @@ export default function App() {
       if (res.status === 403) { setIsAuthorized(false); return; }
       setIpForm({ ip: '', desc: '' });
       loadIps();
-      showToast("IP liberado com sucesso!", "success"); // <--- AQUI
-    } catch (e) { showToast('Erro ao salvar IP.', "error"); } // <--- AQUI
+      showToast("IP liberado com sucesso!", "success");
+    } catch (e) { showToast('Erro ao salvar IP.', "error"); }
   };
   const confirmDelete = async () => {
     if (!deleteModal.id) return;
@@ -420,14 +435,17 @@ export default function App() {
       const res = await fetch(url, { method: 'DELETE' });
       if (res.status === 403) { setIsAuthorized(false); return; }
       
-      if (deleteModal.type === 'PROD') { loadProducts(); showToast("Produto excluído.", "success"); } // <--- AQUI
-      else { loadIps(); showToast("Acesso revogado.", "success"); } // <--- AQUI
+      if (deleteModal.type === 'PROD') { loadProducts(); showToast("Produto excluído.", "success"); }
+      else { loadIps(); showToast("Acesso revogado.", "success"); }
       
       setDeleteModal({ open: false, type: null, id: null });
-    } catch (e) { showToast('Erro ao excluir.', "error"); } // <--- AQUI
+    } catch (e) { showToast('Erro ao excluir.', "error"); }
   };
   
   const formatMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatDate = (date: string) => { try { return new Date(date).toLocaleDateString('pt-BR') + ' às ' + new Date(date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}); } catch { return date; } };
+  const getStatusStyle = (st: string) => { switch(st) { case 'paid': return 'bg-green-100 text-green-700 border-green-200'; case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200'; case 'cancelled': return 'bg-red-100 text-red-700 border-red-200'; default: return 'bg-gray-100 text-gray-600 border-gray-200'; } };
+  const translateStatus = (st: string) => { const map: any = { 'paid': 'Pago', 'pending': 'Pendente', 'cancelled': 'Cancelado' }; return map[st] || st; };
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
   const preventNonNumeric = (e: React.KeyboardEvent) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault(); };
 
@@ -515,7 +533,7 @@ export default function App() {
                         <td className="px-6 py-3">
                             <div className="flex items-center gap-1 bg-slate-100 w-fit px-2 py-1 rounded-lg border border-slate-200 shadow-sm">
                                 <button onClick={() => updateStock(p.id, p.stock_quantity, -1)} className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-red-500 transition-colors active:scale-95"><Minus size={14}/></button>
-                                <input type="number" className={`w-12 text-center bg-transparent outline-none font-mono font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`} value={p.stock_quantity} onChange={(e) => handleManualStockChange(p.id, e.target.value)} onBlur={(e) => persistStock(p.id, parseInt(e.target.value) || 0)} onKeyDown={(e) => { preventNonNumeric(e); if(e.key === 'Enter') e.currentTarget.blur(); }} />
+                                <input type="number" className={`w-12 text-center bg-transparent outline-none font-mono font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`} value={p.stock_quantity} onChange={(e) => handleManualStock(p.id, e.target.value)} onBlur={(e) => persistStock(p.id, parseInt(e.target.value) || 0)} onKeyDown={(e) => { preventNonNumeric(e); if(e.key === 'Enter') e.currentTarget.blur(); }} />
                                 <button onClick={() => updateStock(p.id, p.stock_quantity, 1)} className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-green-600 transition-colors active:scale-95"><Plus size={14}/></button>
                             </div>
                         </td>
@@ -546,21 +564,18 @@ export default function App() {
                     <button onClick={handleSaveSiteConfig} className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> Publicar no Site</button>
                 </div>
 
-                {/* --- NOVO BLOCO: CARROSSEL PRINCIPAL --- */}
+                {/* --- CARROSSEL PRINCIPAL (NOVO) --- */}
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 mb-8">
                     <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
                         <div className="p-2 bg-blue-100 text-blue-700 rounded-lg"><Monitor size={24}/></div>
-                        <div>
-                            <h3 className="font-bold text-xl text-slate-800">Carrossel Principal</h3>
-                            <p className="text-xs text-slate-500">Imagens grandes no topo do site.</p>
-                        </div>
+                        <div><h3 className="font-bold text-xl text-slate-800">Carrossel Principal</h3><p className="text-xs text-slate-500">Imagens grandes no topo do site.</p></div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* Lado Esquerdo: Lista de Slides */}
                         <div className="space-y-6">
                             {siteConfig.hero_slides.map((slide, index) => (
-                                <div key={index} className="bg-gray-50 p-4 rounded-xl border border-gray-200 relative group">
+                                <div key={index} className="bg-gray-50 p-4 rounded-xl border border-gray-200 relative group animate-enter">
                                     <div className="grid gap-3">
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Imagem URL (1920x1080px)</label>
@@ -575,7 +590,7 @@ export default function App() {
                                                     }}
                                                 />
                                                 <div className="w-10 h-10 bg-white rounded border border-gray-200 shrink-0 overflow-hidden flex items-center justify-center">
-                                                    {slide.image ? <img src={slide.image} className="w-full h-full object-cover"/> : <ImageIcon size={16} className="text-gray-300"/>}
+                                                    {slide.image ? <img src={slide.image} className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display='none'} /> : <ImageIcon size={16} className="text-gray-300"/>}
                                                 </div>
                                             </div>
                                         </div>
@@ -607,7 +622,7 @@ export default function App() {
                                             const newSlides = siteConfig.hero_slides.filter((_, i) => i !== index);
                                             setSiteConfig({...siteConfig, hero_slides: newSlides});
                                         }}
-                                        className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200"
+                                        className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 shadow-sm"
                                         title="Remover Slide"
                                     >
                                         <X size={14}/>
@@ -620,7 +635,7 @@ export default function App() {
                                     ...siteConfig, 
                                     hero_slides: [...siteConfig.hero_slides, { image: '', title: 'Novo Destaque', subtitle: 'Descrição curta' }]
                                 })}
-                                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
+                                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 hover:bg-blue-50"
                             >
                                 <PlusCircle size={18} /> Adicionar Slide
                             </button>
@@ -630,8 +645,9 @@ export default function App() {
                         <div>
                             <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Eye size={14}/> Pré-visualização</p>
                             <CarouselPreview slides={siteConfig.hero_slides} />
-                            <div className="mt-4 bg-blue-50 p-4 rounded-xl text-xs text-blue-700 leading-relaxed border border-blue-100">
-                                <strong>Dica:</strong> A primeira imagem é a mais importante. Use imagens de alta qualidade (Full HD 1920x1080px ou similar) para garantir que o site fique bonito em telas grandes.
+                            <div className="mt-4 bg-blue-50 p-4 rounded-xl text-xs text-blue-700 leading-relaxed border border-blue-100 flex gap-2">
+                                <Monitor size={16} className="shrink-0 mt-0.5"/>
+                                <div><strong>Dica de Design:</strong> A primeira imagem é a mais importante. Use imagens de alta qualidade (Full HD 1920x1080px ou similar) para garantir que o site fique bonito em telas grandes.</div>
                             </div>
                         </div>
                     </div>
