@@ -26,12 +26,22 @@ import {
   Square,       
   ImageIcon,    
   Eye,
+  CheckCircle2, 
+  XCircle,      
+  AlertCircle
   Monitor
 } from 'lucide-react';
 
 const API_URL = 'https://api-celeiro-da-cachaca.onrender.com';
 
 // --- INTERFACES ---
+
+interface Toast {
+    id: number;
+    message: string;
+    type: 'success' | 'error' | 'warning';
+}
+
 interface Product { 
   id: string; 
   name: string; 
@@ -165,6 +175,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [ips, setIps] = useState<AllowedIp[]>([]);
   const [logs, setLogs] = useState<LogMessage[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   
   // ESTADO DE CONFIGURAÇÃO DO SITE (CMS)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
@@ -178,6 +189,13 @@ export default function App() {
       section_image: '',
       highlight_ids: []
   });
+
+  // ADICIONE ESTA FUNÇÃO HELPER:
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+      const id = Date.now();
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  };
   
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -254,32 +272,45 @@ export default function App() {
 
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = { 
-        ...prodForm, 
-        price: parseFloat(String(prodForm.price).replace(',', '.')), 
-        abv: parseFloat(String(prodForm.abv).replace(',', '.')), 
-        stock_quantity: Number(prodForm.stock_quantity) 
-    };
+    const priceString = String(prodForm.price).replace(',', '.');
+    const abvString = String(prodForm.abv).replace(',', '.');
+    const priceFinal = parseFloat(priceString);
+    const abvFinal = parseFloat(abvString);
+
+    if (isNaN(priceFinal) || isNaN(abvFinal)) {
+        showToast("O preço e o teor alcoólico devem ser números válidos.", "warning"); // <--- AQUI
+        return;
+    }
+
+    const payload = { ...prodForm, price: priceFinal, abv: abvFinal, stock_quantity: Number(prodForm.stock_quantity) };
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId ? `${API_URL}/api/products/${editingId}` : `${API_URL}/api/products`;
-    try { 
-        const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); 
-        if (res.ok) { 
-            await loadProducts(); 
-            setView('PRODUCTS'); 
-            if (!editingId) handleCreateProd(); 
-        } else alert('Erro ao salvar'); 
-    } catch { alert('Erro conexão'); }
+
+    try {
+      const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+      if (res.status === 403) { setIsAuthorized(false); return; }
+
+      if (res.ok) { 
+          await loadProducts(); 
+          if (!editingId) handleCreateProd();
+          setView('PRODUCTS');
+          showToast(editingId ? "Produto atualizado com sucesso!" : "Produto criado com sucesso!", "success"); // <--- AQUI
+      } else { 
+          const errorData = await res.json();
+          showToast('Erro: ' + (errorData.error || errorData.message), "error"); // <--- AQUI
+      }
+    } catch (e) { showToast('Erro de conexão com o servidor.', "error"); } // <--- AQUI
   };
 
-  const persistStock = async (id: string, newQuantity: number) => { 
-      try { 
-          await fetch(`${API_URL}/api/products/${id}/stock`, { 
-              method: 'PATCH', 
-              headers: {'Content-Type': 'application/json'}, 
-              body: JSON.stringify({ quantity: newQuantity }) 
-          }); 
-      } catch (e) { loadProducts(); } 
+  const persistStock = async (id: string, newQuantity: number) => {
+    try {
+        const res = await fetch(`${API_URL}/api/products/${id}/stock`, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ quantity: newQuantity }) });
+        if (!res.ok) throw new Error();
+        showToast("Estoque atualizado.", "success"); // <--- AQUI
+    } catch (e) {
+        showToast("Erro ao salvar estoque.", "error"); // <--- AQUI
+        loadProducts(); 
+    }
   };
   
   const updateStock = (id: string, current: number, change: number) => { 
@@ -309,14 +340,10 @@ export default function App() {
   const handleSaveSiteConfig = async (e: React.FormEvent) => {
       e.preventDefault();
       try {
-          const res = await fetch(`${API_URL}/api/site-config`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(siteConfig)
-          });
-          if (res.ok) alert('Site atualizado com sucesso!');
-          else alert('Erro ao atualizar site');
-      } catch (e) { alert('Erro de conexão'); }
+          const res = await fetch(`${API_URL}/api/site-config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(siteConfig) });
+          if (res.ok) showToast('Site atualizado com sucesso!', 'success'); // <--- AQUI
+          else showToast('Erro ao atualizar site.', 'error'); // <--- AQUI
+      } catch (e) { showToast('Erro de conexão.', 'error'); } // <--- AQUI
   };
 
   const toggleHighlight = (productId: string) => {
@@ -327,8 +354,29 @@ export default function App() {
       });
   };
 
-  const handleSaveIp = async (e: React.FormEvent) => { e.preventDefault(); try { await fetch(`${API_URL}/api/allowed-ips`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc }) }); setIpForm({ ip: '', desc: '' }); loadIps(); } catch { alert('Erro salvar IP'); } };
-  const confirmDelete = async () => { if (!deleteModal.id) return; try { const url = deleteModal.type === 'PROD' ? `${API_URL}/api/products/${deleteModal.id}` : `${API_URL}/api/allowed-ips/${deleteModal.id}`; await fetch(url, { method: 'DELETE' }); if (deleteModal.type === 'PROD') loadProducts(); else loadIps(); setDeleteModal({ open: false, type: null, id: null }); } catch { alert('Erro excluir'); } };
+  const handleSaveIp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_URL}/api/allowed-ips`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ip_address: ipForm.ip, description: ipForm.desc }) });
+      if (res.status === 403) { setIsAuthorized(false); return; }
+      setIpForm({ ip: '', desc: '' });
+      loadIps();
+      showToast("IP liberado com sucesso!", "success"); // <--- AQUI
+    } catch (e) { showToast('Erro ao salvar IP.', "error"); } // <--- AQUI
+  };
+  const confirmDelete = async () => {
+    if (!deleteModal.id) return;
+    try {
+      let url = deleteModal.type === 'PROD' ? `${API_URL}/api/products/${deleteModal.id}` : `${API_URL}/api/allowed-ips/${deleteModal.id}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      if (res.status === 403) { setIsAuthorized(false); return; }
+      
+      if (deleteModal.type === 'PROD') { loadProducts(); showToast("Produto excluído.", "success"); } // <--- AQUI
+      else { loadIps(); showToast("Acesso revogado.", "success"); } // <--- AQUI
+      
+      setDeleteModal({ open: false, type: null, id: null });
+    } catch (e) { showToast('Erro ao excluir.', "error"); } // <--- AQUI
+  };
   
   const formatMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
@@ -339,6 +387,22 @@ export default function App() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+
+      {/* --- INSERIR AQUI O BLOCO DE TOASTS --- */}
+      <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+          {toasts.map(toast => (
+              <div key={toast.id} className={`pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl animate-enter border-l-4 ${
+                  toast.type === 'success' ? 'bg-white border-green-500 text-green-800' :
+                  toast.type === 'error' ? 'bg-white border-red-500 text-red-800' :
+                  'bg-white border-yellow-500 text-yellow-800'
+              }`}>
+                  {toast.type === 'success' && <CheckCircle2 size={20} className="text-green-500"/>}
+                  {toast.type === 'error' && <XCircle size={20} className="text-red-500"/>}
+                  {toast.type === 'warning' && <AlertCircle size={20} className="text-yellow-500"/>}
+                  <span className="font-medium text-sm">{toast.message}</span>
+              </div>
+          ))}
+      </div>
       
       {/* SIDEBAR */}
       <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg z-20 border-b border-slate-800">
