@@ -31,8 +31,12 @@ import {
   AlertCircle,
   Monitor,
   PackageOpen,
+  // NOVOS ÍCONES ADICIONADOS
   Mail,
-  Phone
+  Phone,
+  Truck,
+  CreditCard,
+  Home,
 } from "lucide-react";
 
 const API_URL = "https://api-celeiro-da-cachaca.onrender.com";
@@ -89,6 +93,9 @@ interface Order {
   email: string;
   phone: string;
   items: OrderItem[];
+  // NOVOS CAMPOS ADICIONADOS
+  shipping_method: string; // Ex: "Correios Sedex", "Retirada na Loja"
+  payment_method: string; // Ex: "Cartão de Crédito", "PIX"
 }
 
 interface AllowedIp {
@@ -324,6 +331,7 @@ export default function App() {
   });
 
   const [products, setProducts] = useState<Product[]>([]);
+  // Atualizando o tipo da lista de pedidos
   const [orders, setOrders] = useState<Order[]>([]);
   const [ips, setIps] = useState<AllowedIp[]>([]);
   const [logs, setLogs] = useState<LogMessage[]>([]);
@@ -488,7 +496,15 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/admin/orders`);
       if (res.ok) {
         const data = await res.json();
-        setOrders(data);
+        // MOCK DE DADOS PARA DEMONSTRAÇÃO DOS NOVOS CAMPOS
+        // EM PROD, VOCÊ DEVE GARANTIR QUE SUA API RETORNE ESSES DADOS!
+        const mockedOrders = data.map((order: any) => ({
+          ...order,
+          shipping_method: order.shipping_method || (order.shipping_address.includes("Rua Principal") ? "Retirada na Loja" : "Correios Sedex"),
+          payment_method: order.mp_payment_id ? "Cartão de Crédito/PIX (MP)" : "Boleto Pendente",
+          shipping_address: order.shipping_address || "Endereço indisponível"
+        }));
+        setOrders(mockedOrders);
       }
     } catch {}
   };
@@ -738,8 +754,16 @@ export default function App() {
     }
   };
 
-  const formatMoney = (v: number) =>
-    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  // Funções de formatação
+  const formatMoney = (v: any) => {
+    // Garante que a entrada seja tratada como número
+    const num = Number(v);
+    if (isNaN(num)) return "R$ 0,00";
+    return num.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  };
   const formatDate = (date: string) => {
     try {
       return (
@@ -1513,14 +1537,16 @@ export default function App() {
             </div>
           )}
 
-          {/* OUTRAS VIEWS (Vendas, Logs, Segurança, Form) */}
+          {/* --- VIEW: VENDAS (AGORA MAIS PROFISSIONAL) --- */}
           {view === "SALES" && (
             <div className="animate-enter pb-10">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                  <h2 className="text-3xl font-bold text-slate-800">Vendas</h2>
+                  <h2 className="text-3xl font-bold text-slate-800">
+                    Pedidos e Vendas
+                  </h2>
                   <p className="text-slate-500 mt-1">
-                    Acompanhamento de pedidos em tempo real.
+                    Acompanhamento detalhado de pedidos em tempo real.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm animate-pulse">
@@ -1532,15 +1558,23 @@ export default function App() {
                 {orders.map((o) => (
                   <div
                     key={o.id}
-                    className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300"
+                    className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden group hover:shadow-2xl transition-all duration-300"
                   >
-                    <div className="bg-slate-50/80 p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4">
+                    {/* Cabeçalho do Pedido */}
+                    <div className="bg-slate-900 text-white p-5 border-b border-slate-800 flex flex-wrap justify-between items-center gap-4">
                       <div className="flex items-center gap-4">
-                        <div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">
+                        <span className="font-extrabold text-2xl text-yellow-500">
                           #{o.id}
-                        </div>
+                        </span>
                         <div>
-                          <p className="text-sm font-medium text-slate-700">
+                          <p className="text-sm font-light text-slate-300">
+                            ID Transação:{" "}
+                            <span className="font-mono text-xs text-yellow-300">
+                              {o.mp_payment_id || "N/A"}
+                            </span>
+                          </p>
+                          <p className="text-sm font-medium text-slate-100 flex items-center gap-2">
+                            <Clock size={14} />{" "}
                             {formatDate(o.created_at)}
                           </p>
                         </div>
@@ -1553,35 +1587,91 @@ export default function App() {
                         {translateStatus(o.status)}
                       </div>
                     </div>
-                    <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                      <div className="space-y-6">
+
+                    <div className="p-6 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                      {/* COLUNA 1: Cliente e Contato */}
+                      <div className="lg:col-span-1 space-y-6">
                         <div>
                           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
                             <User size={14} /> Cliente
                           </h4>
-                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
-                            <p className="font-bold text-slate-800 text-lg">
+                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
+                            <p className="font-bold text-slate-800 text-lg leading-tight">
                               {o.full_name}
                             </p>
                             <div className="space-y-1">
                               <p className="text-slate-500 text-sm flex items-center gap-2">
-                                <Mail size={14} /> {o.email}
+                                <Mail size={14} className="text-blue-500" />{" "}
+                                {o.email}
                               </p>
                               <p className="text-slate-500 text-sm flex items-center gap-2">
-                                <Phone size={14} /> {o.phone}
+                                <Phone size={14} className="text-green-500" />{" "}
+                                {o.phone}
                               </p>
                             </div>
                           </div>
                         </div>
+
+                        {/* Detalhes de Logística */}
+                        <div className="space-y-4">
+                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3 mt-6">
+                            <Package size={14} /> Logística
+                          </h4>
+                          <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <Truck size={20} className="text-yellow-600 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase">
+                                  Método de Envio
+                                </p>
+                                <p className="font-semibold text-slate-800 leading-none">
+                                  {o.shipping_method}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <CreditCard size={20} className="text-purple-600 shrink-0" />
+                              <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase">
+                                  Pagamento
+                                </p>
+                                <p className="font-semibold text-slate-800 leading-none">
+                                  {o.payment_method}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="lg:col-span-2 flex flex-col h-full">
+
+                      {/* COLUNA 2: Endereço de Envio */}
+                      <div className="lg:col-span-1">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                          <Package size={14} /> Itens
+                          <Home size={14} /> Endereço de Entrega
+                        </h4>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-1 h-full shadow-sm">
+                          <p className="text-slate-600 whitespace-pre-line">
+                            {o.shipping_address}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* COLUNA 3 e 4: Itens e Total (Expandida para melhor visualização) */}
+                      <div className="lg:col-span-3 xl:col-span-2 flex flex-col h-full">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                          <Package size={14} /> Itens Comprados
                         </h4>
                         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
                           {Array.isArray(o.items) && o.items.length > 0 ? (
                             <div className="overflow-x-auto">
                               <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 text-xs font-medium text-slate-500 uppercase">
+                                    <tr>
+                                        <th className="p-3 pl-4">Produto</th>
+                                        <th className="p-3 text-center">Qtde</th>
+                                        <th className="p-3 text-right pr-4">Subtotal</th>
+                                    </tr>
+                                </thead>
                                 <tbody className="divide-y divide-slate-100">
                                   {o.items.map((item, idx) => (
                                     <tr
@@ -1589,16 +1679,28 @@ export default function App() {
                                       className="hover:bg-slate-50/50"
                                     >
                                       <td className="p-3 pl-4">
-                                        <span className="font-medium text-slate-700">
-                                          {item.name}
-                                        </span>
+                                        <div className='flex items-center gap-3'>
+                                            <div className="w-10 h-10 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-1 shadow-sm">
+                                                <img 
+                                                    src={item.image} 
+                                                    className="w-full h-full object-contain"
+                                                    alt={item.name}
+                                                />
+                                            </div>
+                                            <span className="font-medium text-slate-700">
+                                              {item.name}
+                                              <span className="block text-xs text-slate-400 font-normal mt-0.5">
+                                                  {formatMoney(Number(item.unit_price))} p/ un.
+                                              </span>
+                                            </span>
+                                        </div>
                                       </td>
                                       <td className="p-3 text-center">
                                         <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">
                                           x{item.quantity}
                                         </span>
                                       </td>
-                                      <td className="p-3 text-right pr-4 font-medium text-slate-600">
+                                      <td className="p-3 text-right pr-4 font-bold text-slate-700">
                                         {formatMoney(
                                           Number(item.unit_price) *
                                             Number(item.quantity)
@@ -1611,16 +1713,15 @@ export default function App() {
                             </div>
                           ) : (
                             <div className="p-8 text-center text-slate-400">
-                              Detalhes indisponíveis.
+                              Detalhes dos itens indisponíveis.
                             </div>
                           )}
                         </div>
-                        <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center">
-                          <span className="text-green-800 text-sm font-bold uppercase tracking-wide">
-                            Total
+                        <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center shadow-md">
+                          <span className="text-green-800 text-lg font-bold uppercase tracking-wide">
+                            Total do Pedido
                           </span>
-                          <div className="flex items-center gap-1 text-2xl font-extrabold text-green-600">
-                            <DollarSign size={20} className="mt-1" />
+                          <div className="flex items-center gap-1 text-3xl font-extrabold text-green-700">
                             {formatMoney(o.total_amount)}
                           </div>
                         </div>
