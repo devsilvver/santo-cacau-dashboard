@@ -13,7 +13,7 @@ import {
   User, 
   Menu, 
   Lock, 
-  Loader2,
+  Loader2, 
   Github, 
   Package, 
   Clock, 
@@ -21,11 +21,12 @@ import {
   Terminal, 
   Minus, 
   Plus,
-  Palette,      // Novo
-  CheckSquare,  // Novo
-  Square,       // Novo
-  ImageIcon,    // Novo
-  Eye           // Novo
+  Palette,      
+  CheckSquare,  
+  Square,       
+  ImageIcon,    
+  Eye,
+  Monitor
 } from 'lucide-react';
 
 const API_URL = 'https://api-celeiro-da-cachaca.onrender.com';
@@ -62,38 +63,52 @@ interface Order {
 interface AllowedIp { id: number; ip_address: string; description: string; created_at: string; }
 interface LogMessage { type: string; ip: string; timestamp: string; message: string; }
 
-// NOVA INTERFACE PARA CONFIGURAÇÃO DO SITE
+// INTERFACE ATUALIZADA DO CMS
 interface SiteConfig {
     banner_tag: string;
     banner_title: string;
-    banner_image: string; // URL da imagem do banner
+    banner_image: string;     // Ícone/Ilustração flutuante
+    banner_bg_color: string;  // Cor de fundo
+    banner_bg_image: string;  // Imagem de fundo completa
     section_tag: string;
     section_title: string;
-    section_image: string; // URL da imagem da seção
+    section_image: string;
     highlight_ids: string[];
 }
 
 // --- COMPONENTES DE PRÉ-VISUALIZAÇÃO (SIMULAÇÃO DO SITE) ---
 
 const BannerPreview = ({ config }: { config: SiteConfig }) => (
-    <div className="w-full bg-[#1A1A1A] py-8 px-6 rounded-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4 border border-gray-800 shadow-xl">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#DAA520] rounded-full blur-[60px] opacity-20"></div>
+    <div 
+        className="w-full py-8 px-6 rounded-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4 border border-gray-800 shadow-xl transition-all duration-500 bg-cover bg-center"
+        style={{ 
+            backgroundColor: config.banner_bg_color || '#1A1A1A',
+            backgroundImage: config.banner_bg_image ? `url(${config.banner_bg_image})` : 'none'
+        }}
+    >
+        {/* Overlay escuro para garantir leitura se tiver imagem de fundo */}
+        {config.banner_bg_image && <div className="absolute inset-0 bg-black/40 z-0"></div>}
+
+        {/* Efeito de luz padrão se não tiver imagem */}
+        {!config.banner_bg_image && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-[60px]"></div>}
+        
         <div className="relative z-10 text-left max-w-sm">
-            <span className="inline-block px-3 py-1 bg-[#DAA520]/20 text-[#DAA520] text-[10px] font-bold uppercase tracking-widest rounded-full mb-3 border border-[#DAA520]/50">
+            <span className="inline-block px-3 py-1 bg-white/20 text-white text-[10px] font-bold uppercase tracking-widest rounded-full mb-3 border border-white/30 backdrop-blur-sm">
                 {config.banner_tag || 'TAG DO BANNER'}
             </span>
-            <h2 className="text-xl font-serif font-bold text-white mb-3 leading-tight">
+            <h2 className="text-xl font-serif font-bold text-white mb-3 leading-tight drop-shadow-md">
                 {config.banner_title || 'Título do Banner'}
             </h2>
             <div className="flex gap-2">
-                <div className="w-24 h-8 bg-[#DAA520] rounded-lg opacity-80"></div>
+                <div className="w-24 h-8 bg-white/20 backdrop-blur-md rounded-lg border border-white/10"></div>
             </div>
         </div>
-        <div className="relative z-10 w-24 h-24 shrink-0">
+        
+        <div className="relative z-10 w-24 h-24 shrink-0 animate-float">
             {config.banner_image ? (
-                <img src={config.banner_image} className="w-full h-full object-contain drop-shadow-2xl" alt="Banner Preview" onError={(e) => e.currentTarget.style.display='none'} />
+                <img src={config.banner_image} className="w-full h-full object-contain drop-shadow-2xl" alt="Banner Icon" onError={(e) => e.currentTarget.style.display='none'} />
             ) : (
-                <div className="w-full h-full border-2 border-dashed border-gray-700 rounded-full flex items-center justify-center text-gray-500 text-xs text-center p-2">
+                <div className="w-full h-full border-2 border-dashed border-white/30 rounded-full flex items-center justify-center text-white/50 text-xs text-center p-2">
                     <ImageIcon size={20} className="mb-1 opacity-50"/>
                 </div>
             )}
@@ -102,7 +117,6 @@ const BannerPreview = ({ config }: { config: SiteConfig }) => (
 );
 
 const SectionPreview = ({ config, products }: { config: SiteConfig, products: Product[] }) => {
-    // Pega os produtos selecionados para mostrar no preview
     const previewProducts = products.filter(p => config.highlight_ids.includes(p.id)).slice(0, 2);
     
     return (
@@ -121,7 +135,6 @@ const SectionPreview = ({ config, products }: { config: SiteConfig, products: Pr
                 </div>
             </div>
             
-            {/* Mini Grid de Produtos */}
             <div className="grid grid-cols-2 gap-3">
                 {previewProducts.length > 0 ? previewProducts.map(p => (
                     <div key={p.id} className="aspect-[3/4] bg-gray-50 rounded-xl border border-gray-100 flex flex-col items-center justify-center p-2 text-center relative overflow-hidden">
@@ -142,11 +155,9 @@ const SectionPreview = ({ config, products }: { config: SiteConfig, products: Pr
 };
 
 export default function App() {
-  // --- ESTADOS DE CONTROLE DE ACESSO ---
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
-  // --- ESTADOS DE NAVEGAÇÃO E DADOS ---
   const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY' | 'LOGS' | 'SITE_CONFIG'>('PRODUCTS');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -157,15 +168,20 @@ export default function App() {
   
   // ESTADO DE CONFIGURAÇÃO DO SITE (CMS)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
-      banner_tag: '', banner_title: '', banner_image: '',
-      section_tag: '', section_title: '', section_image: '',
+      banner_tag: '', 
+      banner_title: '', 
+      banner_image: '',
+      banner_bg_color: '#1A1A1A', // Default
+      banner_bg_image: '',
+      section_tag: '', 
+      section_title: '', 
+      section_image: '',
       highlight_ids: []
   });
   
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // --- ESTADOS DE FORMULÁRIOS ---
   const [editingId, setEditingId] = useState<string | null>(null);
   const [prodForm, setProdForm] = useState({ 
     name: '', description: '', price: '', packaging: 'Garrafa PET', 
@@ -174,7 +190,6 @@ export default function App() {
   const [ipForm, setIpForm] = useState({ ip: '', desc: '' });
   const [deleteModal, setDeleteModal] = useState<{open: boolean, type: 'PROD'|'IP'|null, id: string|number|null}>({ open: false, type: null, id: null });
 
-  // --- VERIFICAÇÃO INICIAL ---
   const verifyAccess = async () => {
     setIsCheckingAuth(true);
     try {
@@ -185,7 +200,6 @@ export default function App() {
   };
   useEffect(() => { verifyAccess(); }, []);
 
-  // --- POLLING ---
   useEffect(() => {
     let interval: any;
     if (isAuthorized) {
@@ -199,7 +213,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [view, isAuthorized]);
 
-  // --- LOGS SSE ---
   useEffect(() => {
     if (!isAuthorized) return;
     const eventSource = new EventSource(`${API_URL}/api/logs/stream`);
@@ -208,7 +221,6 @@ export default function App() {
     return () => eventSource.close();
   }, [isAuthorized]);
 
-  // --- CARREGAMENTO DE DADOS ---
   const loadProducts = async () => {
     setLoading(true);
     try {
@@ -221,7 +233,6 @@ export default function App() {
   const loadOrders = async () => { try { const res = await fetch(`${API_URL}/api/admin/orders`); if(res.ok) { const data = await res.json(); setOrders(data); } } catch {} };
   const loadIps = async () => { try { const res = await fetch(`${API_URL}/api/allowed-ips`); if(res.ok) { const data = await res.json(); setIps(data); } } catch {} };
   
-  // Carregar Configurações do Site (CMS)
   const loadSiteConfig = async () => {
       try {
           const res = await fetch(`${API_URL}/api/site-config`);
@@ -241,7 +252,6 @@ export default function App() {
       } 
   }, [view, isAuthorized]);
 
-  // --- HANDLERS (AÇÕES) ---
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = { 
@@ -348,7 +358,7 @@ export default function App() {
           {[
             { id: 'PRODUCTS', icon: LayoutDashboard, label: 'Produtos' },
             { id: 'SALES', icon: ShoppingBag, label: 'Vendas' },
-            { id: 'SITE_CONFIG', icon: Palette, label: 'Marketing & Site' }, // NOVA OPÇÃO
+            { id: 'SITE_CONFIG', icon: Palette, label: 'Marketing & Site' },
             { id: 'SECURITY', icon: Shield, label: 'Segurança' },
             { id: 'LOGS', icon: Terminal, label: 'Logs' }
           ].map(item => (
@@ -424,19 +434,31 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
-                    {/* BANNER DE BENEFÍCIOS */}
+                    {/* BANNER DE BENEFÍCIOS - EDITÁVEL */}
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col h-full">
                         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
                             <div className="p-2 bg-yellow-100 text-yellow-700 rounded-lg"><LayoutDashboard size={24}/></div>
                             <h3 className="font-bold text-xl text-slate-800">Banner de Benefícios</h3>
                         </div>
+                        
                         <div className="space-y-5 flex-1">
                             <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Etiqueta (Ex: Oferta Exclusiva)</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 outline-none transition-all" value={siteConfig.banner_tag} onChange={e => setSiteConfig({...siteConfig, banner_tag: e.target.value})} /></div>
                             <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Título Principal</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-serif text-lg focus:border-yellow-500 outline-none transition-all" value={siteConfig.banner_title} onChange={e => setSiteConfig({...siteConfig, banner_title: e.target.value})} /></div>
-                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">URL da Imagem (Ícone/Ilustração)</label><div className="flex gap-2"><input className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 outline-none text-sm" placeholder="https://..." value={siteConfig.banner_image} onChange={e => setSiteConfig({...siteConfig, banner_image: e.target.value})} /><div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 overflow-hidden">{siteConfig.banner_image ? <img src={siteConfig.banner_image} className="w-full h-full object-cover"/> : <ImageIcon size={20} className="text-gray-400"/>}</div></div></div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Cor de Fundo</label><div className="flex items-center gap-2 border border-gray-200 p-2 rounded-xl bg-gray-50"><input type="color" className="w-8 h-8 rounded cursor-pointer border-none" value={siteConfig.banner_bg_color || '#1A1A1A'} onChange={e => setSiteConfig({...siteConfig, banner_bg_color: e.target.value})} /><span className="text-sm text-gray-600 font-mono">{siteConfig.banner_bg_color}</span></div></div>
+                                <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Ícone Flutuante (URL)</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 outline-none text-xs" placeholder="https://..." value={siteConfig.banner_image} onChange={e => setSiteConfig({...siteConfig, banner_image: e.target.value})} /></div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Imagem de Fundo Completa (Opcional)</label>
+                                <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-yellow-500 outline-none text-sm" placeholder="https://exemplo.com/banner.jpg" value={siteConfig.banner_bg_image} onChange={e => setSiteConfig({...siteConfig, banner_bg_image: e.target.value})} />
+                                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1"><Monitor size={10}/> Recomendado: 1920x400px. Substitui a cor de fundo.</p>
+                            </div>
                         </div>
+
                         <div className="mt-8 pt-6 border-t border-gray-100">
-                            <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Eye size={14}/> Pré-visualização</p>
+                            <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Eye size={14}/> Pré-visualização em Tempo Real</p>
                             <BannerPreview config={siteConfig} />
                         </div>
                     </div>
@@ -447,11 +469,13 @@ export default function App() {
                             <div className="p-2 bg-green-100 text-green-700 rounded-lg"><Package size={24}/></div>
                             <h3 className="font-bold text-xl text-slate-800">Destaque Sazonal</h3>
                         </div>
+
                         <div className="space-y-5 flex-1">
                             <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Etiqueta (Ex: Páscoa, Natal)</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-green-500 outline-none transition-all" value={siteConfig.section_tag} onChange={e => setSiteConfig({...siteConfig, section_tag: e.target.value})} /></div>
                             <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Título da Seção</label><input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-serif text-lg focus:border-green-500 outline-none transition-all" value={siteConfig.section_title} onChange={e => setSiteConfig({...siteConfig, section_title: e.target.value})} /></div>
-                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">URL da Imagem (Tema/Ícone)</label><div className="flex gap-2"><input className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-green-500 outline-none text-sm" placeholder="https://..." value={siteConfig.section_image} onChange={e => setSiteConfig({...siteConfig, section_image: e.target.value})} /><div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 overflow-hidden">{siteConfig.section_image ? <img src={siteConfig.section_image} className="w-full h-full object-cover"/> : <ImageIcon size={20} className="text-gray-400"/>}</div></div></div>
+                            <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">URL do Ícone/Tema (Opcional)</label><div className="flex gap-2"><input className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-green-500 outline-none text-sm" placeholder="https://..." value={siteConfig.section_image} onChange={e => setSiteConfig({...siteConfig, section_image: e.target.value})} /><div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 overflow-hidden">{siteConfig.section_image ? <img src={siteConfig.section_image} className="w-full h-full object-cover"/> : <ImageIcon size={20} className="text-gray-400"/>}</div></div></div>
                         </div>
+
                         <div className="mt-8 pt-6 border-t border-gray-100">
                             <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Eye size={14}/> Pré-visualização</p>
                             <SectionPreview config={siteConfig} products={products} />
@@ -470,7 +494,8 @@ export default function App() {
                             <thead className="bg-gray-50 text-xs uppercase font-bold text-slate-500 sticky top-0 z-10 shadow-sm"><tr><th className="p-4">Status</th><th className="p-4">Produto</th><th className="p-4">Categoria</th><th className="p-4 text-right">Preço</th></tr></thead>
                             <tbody className="divide-y divide-gray-100">
                                 {products.map(p => {
-                                    const isSelected = siteConfig.highlight_ids?.includes(p.id);
+                                    // Compara ambos como string para evitar erro de tipo
+                                    const isSelected = siteConfig.highlight_ids?.map(String).includes(String(p.id));
                                     return (
                                         <tr key={p.id} onClick={() => toggleHighlight(p.id)} className={`hover:bg-blue-50/30 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/50' : ''}`}>
                                             <td className="p-4">
@@ -494,7 +519,7 @@ export default function App() {
             </div>
         )}
 
-        {/* VIEW: VENDAS */}
+        {/* OUTRAS VIEWS (Vendas, Logs, Segurança, Form) */}
         {view === 'SALES' && (
           <div className="animate-enter pb-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -519,7 +544,6 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: LOGS DO SERVIDOR */}
         {view === 'LOGS' && (
           <div className="animate-enter max-w-5xl mx-auto">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -533,7 +557,6 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: SEGURANÇA */}
         {view === 'SECURITY' && (
           <div className="max-w-4xl mx-auto animate-enter">
             <h2 className="text-3xl font-bold text-slate-800 mb-6">Segurança</h2>
@@ -547,7 +570,6 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: FORMULÁRIO PRODUTO */}
         {view === 'PROD_FORM' && (
           <div className="max-w-2xl mx-auto animate-enter pb-10">
              <button onClick={() => setView('PRODUCTS')} className="mb-4 text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium"><X size={20}/> Cancelar e voltar</button>
