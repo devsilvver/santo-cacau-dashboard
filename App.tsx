@@ -73,17 +73,25 @@ interface Order {
 interface AllowedIp { id: number; ip_address: string; description: string; created_at: string; }
 interface LogMessage { type: string; ip: string; timestamp: string; message: string; }
 
+// Adicione esta interface
+interface HeroSlide {
+    image: string;
+    title: string;
+    subtitle: string;
+}
+
 // INTERFACE ATUALIZADA DO CMS
 interface SiteConfig {
     banner_tag: string;
     banner_title: string;
-    banner_image: string;     // Ícone/Ilustração flutuante
-    banner_bg_color: string;  // Cor de fundo
-    banner_bg_image: string;  // Imagem de fundo completa
+    banner_image: string;
+    banner_bg_color: string;
+    banner_bg_image: string;
     section_tag: string;
     section_title: string;
     section_image: string;
     highlight_ids: string[];
+    hero_slides: HeroSlide[];
 }
 
 // --- COMPONENTES DE PRÉ-VISUALIZAÇÃO (SIMULAÇÃO DO SITE) ---
@@ -164,6 +172,40 @@ const SectionPreview = ({ config, products }: { config: SiteConfig, products: Pr
     );
 };
 
+const CarouselPreview = ({ slides }: { slides: HeroSlide[] }) => {
+    const [current, setCurrent] = useState(0);
+    // Avança o slide automaticamente no preview
+    useEffect(() => {
+        if (slides.length <= 1) return;
+        const timer = setInterval(() => setCurrent(c => (c + 1) % slides.length), 3000);
+        return () => clearInterval(timer);
+    }, [slides]);
+
+    const slide = slides[current] || { image: '', title: 'Exemplo', subtitle: 'Subtítulo' };
+
+    return (
+        <div className="w-full aspect-video bg-gray-900 rounded-xl overflow-hidden relative group border border-gray-200 shadow-sm">
+            {slide.image ? (
+                <img src={slide.image} className="w-full h-full object-cover opacity-60 transition-all duration-700" alt="Preview" />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-600 bg-gray-100">Sem Imagem</div>
+            )}
+            
+            <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-16 text-white z-10">
+                <h2 className="text-2xl md:text-3xl font-serif font-bold mb-2 drop-shadow-lg">{slide.title}</h2>
+                <p className="text-sm md:text-base opacity-90 drop-shadow-md">{slide.subtitle}</p>
+            </div>
+
+            {/* Indicadores */}
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-20">
+                {slides.map((_, idx) => (
+                    <div key={idx} className={`h-1.5 rounded-full transition-all ${idx === current ? 'bg-white w-6' : 'bg-white/40 w-1.5'}`} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
 export default function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -187,7 +229,14 @@ export default function App() {
       section_tag: '', 
       section_title: '', 
       section_image: '',
-      highlight_ids: []
+      highlight_ids: [],
+      hero_slides: [
+          { 
+              image: "https://i.imgur.com/kBnu4IB.jpeg", 
+              title: "Cachaça Artesanal de Figo", 
+              subtitle: "Um sabor inesquecível." 
+          }
+      ]
   });
 
   // ADICIONE ESTA FUNÇÃO HELPER:
@@ -495,6 +544,97 @@ export default function App() {
                         <p className="text-slate-500 mt-1">Gerencie campanhas sazonais e banners de benefícios em tempo real.</p>
                     </div>
                     <button onClick={handleSaveSiteConfig} className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> Publicar no Site</button>
+                </div>
+
+                {/* --- NOVO BLOCO: CARROSSEL PRINCIPAL --- */}
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 mb-8">
+                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                        <div className="p-2 bg-blue-100 text-blue-700 rounded-lg"><Monitor size={24}/></div>
+                        <div>
+                            <h3 className="font-bold text-xl text-slate-800">Carrossel Principal</h3>
+                            <p className="text-xs text-slate-500">Imagens grandes no topo do site.</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Lado Esquerdo: Lista de Slides */}
+                        <div className="space-y-6">
+                            {siteConfig.hero_slides.map((slide, index) => (
+                                <div key={index} className="bg-gray-50 p-4 rounded-xl border border-gray-200 relative group">
+                                    <div className="grid gap-3">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Imagem URL (1920x1080px)</label>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500" 
+                                                    value={slide.image} 
+                                                    onChange={e => {
+                                                        const newSlides = [...siteConfig.hero_slides];
+                                                        newSlides[index].image = e.target.value;
+                                                        setSiteConfig({...siteConfig, hero_slides: newSlides});
+                                                    }}
+                                                />
+                                                <div className="w-10 h-10 bg-white rounded border border-gray-200 shrink-0 overflow-hidden flex items-center justify-center">
+                                                    {slide.image ? <img src={slide.image} className="w-full h-full object-cover"/> : <ImageIcon size={16} className="text-gray-300"/>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input 
+                                                placeholder="Título Principal" 
+                                                className="p-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500"
+                                                value={slide.title}
+                                                onChange={e => {
+                                                    const newSlides = [...siteConfig.hero_slides];
+                                                    newSlides[index].title = e.target.value;
+                                                    setSiteConfig({...siteConfig, hero_slides: newSlides});
+                                                }}
+                                            />
+                                            <input 
+                                                placeholder="Subtítulo" 
+                                                className="p-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500"
+                                                value={slide.subtitle}
+                                                onChange={e => {
+                                                    const newSlides = [...siteConfig.hero_slides];
+                                                    newSlides[index].subtitle = e.target.value;
+                                                    setSiteConfig({...siteConfig, hero_slides: newSlides});
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => {
+                                            const newSlides = siteConfig.hero_slides.filter((_, i) => i !== index);
+                                            setSiteConfig({...siteConfig, hero_slides: newSlides});
+                                        }}
+                                        className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200"
+                                        title="Remover Slide"
+                                    >
+                                        <X size={14}/>
+                                    </button>
+                                </div>
+                            ))}
+                            
+                            <button 
+                                onClick={() => setSiteConfig({
+                                    ...siteConfig, 
+                                    hero_slides: [...siteConfig.hero_slides, { image: '', title: 'Novo Destaque', subtitle: 'Descrição curta' }]
+                                })}
+                                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <PlusCircle size={18} /> Adicionar Slide
+                            </button>
+                        </div>
+
+                        {/* Lado Direito: Preview */}
+                        <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Eye size={14}/> Pré-visualização</p>
+                            <CarouselPreview slides={siteConfig.hero_slides} />
+                            <div className="mt-4 bg-blue-50 p-4 rounded-xl text-xs text-blue-700 leading-relaxed border border-blue-100">
+                                <strong>Dica:</strong> A primeira imagem é a mais importante. Use imagens de alta qualidade (Full HD 1920x1080px ou similar) para garantir que o site fique bonito em telas grandes.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
