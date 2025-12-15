@@ -94,9 +94,9 @@ interface Order {
   email: string;
   phone: string;
   items: OrderItem[];
-  // NOVOS CAMPOS ADICIONADOS
-  shipping_method: string; // Ex: "Correios Sedex", "Retirada na Loja"
-  payment_method: string; // Ex: "Cartão de Crédito", "PIX"
+  shipping_method: string; 
+  // NOVO CAMPO: Recebe o valor do banco
+  payment_method_chosen: string; 
 }
 
 interface AllowedIp {
@@ -506,6 +506,17 @@ export default function App() {
         
         const processedOrders = data.map((order: any) => {
             let itemsArray = [];
+            
+            // Mapeamento para nomes amigáveis no Dashboard
+            const PAYMENT_METHODS_MAP: any = {
+                'PIX': 'Pix',
+                'CREDIT': 'Cartão de Crédito (À Vista)',
+                'INSTALLMENTS': 'Cartão (Parcelado - 6x)',
+                'BILLET': 'Boleto Bancário',
+                'MONEY': 'Dinheiro (Retirada)',
+                'MP_CONFIRM': 'MP - Aguardando Confirmação'
+            };
+
             // 1. CORREÇÃO: Transforma a string JSON de itens em um array de objetos
             if (typeof order.items === 'string' && order.items.length > 0) {
                 try {
@@ -517,15 +528,18 @@ export default function App() {
                 itemsArray = order.items;
             }
 
-            // 2. MOCK/CORREÇÃO DE DADOS ANTIGOS (para exibir corretamente dados pré-correção)
-            // Se o shipping_method for nulo/vazio, tentamos usar o valor que estava no campo address (o bug antigo)
+            // 2. Lógica para determinar o nome do pagamento real
+            // Prioriza o valor do DB, senão usa o MP_ID para status "aprovado" genérico
+            const finalPaymentDisplay = PAYMENT_METHODS_MAP[order.payment_method_chosen] || (order.mp_payment_id ? PAYMENT_METHODS_MAP['MP_CONFIRM'] : 'Método Não Registrado');
+
+            // 3. Lógica para pedidos antigos e endereços (mantida)
             const finalShippingMethod = order.shipping_method || (
-                String(order.shipping_address).includes("SEDEX") || String(order.shipping_address).includes("Retirada") 
+                String(order.shipping_address).includes("SEDEX") || 
+                String(order.shipping_address).includes("Retirada") 
                 ? order.shipping_address 
                 : "Método Não Registrado"
             );
 
-            // 3. Corrigir o address para pedidos antigos que tinham o método no lugar do endereço
             const finalShippingAddress = (
                 String(order.shipping_address).includes("SEDEX") || 
                 String(order.shipping_address).includes("Retirada")
@@ -534,9 +548,9 @@ export default function App() {
             // 4. RETORNO FINAL
             return {
                 ...order,
-                items: itemsArray, // Array de itens corrigido
+                items: itemsArray, 
                 shipping_method: finalShippingMethod,
-                payment_method: order.payment_method || (order.mp_payment_id ? "Cartão de Crédito/PIX (MP)" : "Boleto Pendente"),
+                payment_method: finalPaymentDisplay, // <-- AGORA É O NOME AMIGÁVEL
                 shipping_address: finalShippingAddress,
             };
         });
@@ -547,6 +561,7 @@ export default function App() {
         console.error("Erro ao carregar pedidos:", e);
     }
   };
+  
   const loadIps = async () => {
     try {
       const res = await fetch(`${API_URL}/api/allowed-ips`);
