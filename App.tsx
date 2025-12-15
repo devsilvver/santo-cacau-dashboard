@@ -140,7 +140,6 @@ export default function App() {
   useEffect(() => {
     if (!isAuthorized) return;
 
-    // Conecta sem token, confiando no IP
     const eventSource = new EventSource(`${API_URL}/api/logs/stream`);
 
     eventSource.onmessage = (event) => {
@@ -153,7 +152,6 @@ export default function App() {
     };
 
     eventSource.onerror = (err) => {
-      console.error("Erro na conexão SSE:", err);
       eventSource.close();
     };
 
@@ -178,31 +176,19 @@ export default function App() {
   const loadOrders = async () => {
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`);
-      
-      if (res.status === 403) { 
-        setIsAuthorized(false); 
-        return; 
-      }
+      if (res.status === 403) { setIsAuthorized(false); return; }
       
       const data = await res.json();
-      
       const treatedData = Array.isArray(data) ? data.map((o: any) => {
           const orderDate = new Date(o.created_at).getTime();
           const now = new Date().getTime();
           const hoursDiff = (now - orderDate) / (1000 * 3600);
           
           let statusFinal = o.status;
-          if (o.status === 'pending' && hoursDiff > 24) {
-              statusFinal = 'cancelled';
-          }
+          if (o.status === 'pending' && hoursDiff > 24) statusFinal = 'cancelled';
 
           let parsedItems = [];
-          try {
-            parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items;
-          } catch (err) {
-            parsedItems = [];
-          }
-
+          try { parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items; } catch (err) { parsedItems = []; }
           if (!Array.isArray(parsedItems)) parsedItems = [];
 
           return { ...o, status: statusFinal, items: parsedItems };
@@ -233,12 +219,8 @@ export default function App() {
 
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const priceString = String(prodForm.price).replace(',', '.');
-    const abvString = String(prodForm.abv).replace(',', '.');
-    
-    const priceFinal = parseFloat(priceString);
-    const abvFinal = parseFloat(abvString);
+    const priceFinal = parseFloat(String(prodForm.price).replace(',', '.'));
+    const abvFinal = parseFloat(String(prodForm.abv).replace(',', '.'));
 
     if (isNaN(priceFinal) || isNaN(abvFinal)) {
         alert("Erro: O preço e o teor alcoólico devem ser números válidos.");
@@ -268,37 +250,47 @@ export default function App() {
           await loadProducts(); 
           if (!editingId) handleCreateProd();
           setView('PRODUCTS');
-      }
-      else { 
+      } else { 
           try {
               const errorData = await res.json();
               alert('Erro do Servidor: ' + (errorData.error || errorData.message));
-          } catch (jsonError) {
-              alert('Erro ao salvar produto.');
-          }
+          } catch (jsonError) { alert('Erro ao salvar produto.'); }
       }
-    } catch (e) { 
-        console.error(e);
-        alert('Erro de conexão.'); 
-    }
+    } catch (e) { alert('Erro de conexão.'); }
   };
 
-  const updateStock = async (id: string, currentStock: number, change: number) => {
-    const newStock = Math.max(0, currentStock + change);
-    setProducts(products.map(p => p.id === id ? {...p, stock_quantity: newStock} : p));
-
+  // --- NOVAS FUNÇÕES DE ESTOQUE (PASSO 2.1) ---
+  
+  // Função que envia para o servidor (usada pelos botões e pelo input)
+  const persistStock = async (id: string, newQuantity: number) => {
     try {
         const res = await fetch(`${API_URL}/api/products/${id}/stock`, {
             method: 'PATCH',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ quantity: newStock })
+            body: JSON.stringify({ quantity: newQuantity })
         });
 
         if (!res.ok) throw new Error();
     } catch (e) {
-        alert('Erro ao atualizar estoque');
-        loadProducts();
+        console.error("Erro ao salvar estoque", e);
+        loadProducts(); // Reverte em caso de erro
     }
+  };
+
+  // Chamada pelos botões + e -
+  const updateStock = (id: string, currentStock: number, change: number) => {
+    const newStock = Math.max(0, currentStock + change);
+    // Atualiza na tela
+    setProducts(products.map(p => p.id === id ? {...p, stock_quantity: newStock} : p));
+    // Salva no banco
+    persistStock(id, newStock);
+  };
+
+  // Chamada quando você digita manualmente
+  const handleManualStockChange = (id: string, value: string) => {
+      const newStock = parseInt(value);
+      if (isNaN(newStock)) return; 
+      setProducts(products.map(p => p.id === id ? {...p, stock_quantity: newStock} : p));
   };
 
   const handleEditProd = (p: Product) => {
@@ -353,12 +345,9 @@ export default function App() {
     } catch (e) { alert('Erro ao excluir.'); }
   };
 
-  // --- HELPERS VISUAIS ---
   const formatMoney = (val: string | number) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatDate = (date: string) => {
-    try {
-      return new Date(date).toLocaleDateString('pt-BR') + ' às ' + new Date(date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
-    } catch { return date; }
+    try { return new Date(date).toLocaleDateString('pt-BR') + ' às ' + new Date(date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}); } catch { return date; }
   };
   
   const getStatusStyle = (st: string) => {
@@ -376,8 +365,6 @@ export default function App() {
   };
   
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
-
-  // --- RENDERIZAÇÃO ---
 
   if (isCheckingAuth) {
     return (
@@ -499,13 +486,40 @@ export default function App() {
                                 </div>
                             </div>
                         </td>
+                        
+                        {/* --- PASSO 2.2 IMPLEMENTADO AQUI (INPUT MANUAL) --- */}
                         <td className="px-6 py-3">
-                            <div className="flex items-center gap-2 bg-slate-100 w-fit px-2 py-1.5 rounded-xl border border-slate-200">
-                                <button onClick={() => updateStock(p.id, p.stock_quantity, -1)} className="p-1 hover:bg-white rounded-lg text-slate-400 hover:text-red-500 transition-colors"><Minus size={14}/></button>
-                                <span className={`font-mono font-bold min-w-[24px] text-center text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`}>{p.stock_quantity}</span>
-                                <button onClick={() => updateStock(p.id, p.stock_quantity, 1)} className="p-1 hover:bg-white rounded-lg text-slate-400 hover:text-green-500 transition-colors"><Plus size={14}/></button>
+                            <div className="flex items-center gap-1 bg-slate-100 w-fit px-2 py-1 rounded-lg border border-slate-200 shadow-sm">
+                                <button 
+                                    onClick={() => updateStock(p.id, p.stock_quantity, -1)} 
+                                    className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-red-500 transition-colors active:scale-95"
+                                >
+                                    <Minus size={14}/>
+                                </button>
+                                
+                                {/* Input para digitar manualmente */}
+                                <input 
+                                    type="number"
+                                    className={`w-12 text-center bg-transparent outline-none font-mono font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`}
+                                    value={p.stock_quantity}
+                                    onChange={(e) => handleManualStockChange(p.id, e.target.value)}
+                                    onBlur={(e) => persistStock(p.id, parseInt(e.target.value) || 0)}
+                                    onKeyDown={(e) => {
+                                        if(e.key === 'Enter') {
+                                            e.currentTarget.blur();
+                                        }
+                                    }}
+                                />
+
+                                <button 
+                                    onClick={() => updateStock(p.id, p.stock_quantity, 1)} 
+                                    className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-green-600 transition-colors active:scale-95"
+                                >
+                                    <Plus size={14}/>
+                                </button>
                             </div>
                         </td>
+                        
                         <td className="px-6 py-3 font-bold text-green-600">{formatMoney(p.price)}</td>
                         <td className="px-6 py-3 text-right">
                           <div className="flex justify-end gap-2">
@@ -540,25 +554,38 @@ export default function App() {
                 <div key={o.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300">
                   <div className="bg-slate-50/80 p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4">
                     <div className="flex items-center gap-4">
-                      <div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">#{o.id}</div>
-                      <div><p className="text-sm font-medium text-slate-700">{formatDate(o.created_at)}</p></div>
+                      <div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">
+                        #{o.id}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">{formatDate(o.created_at)}</p>
+                      </div>
                     </div>
-                    <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(o.status)}`}>{translateStatus(o.status)}</div>
+                    <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(o.status)}`}>
+                      {translateStatus(o.status)}
+                    </div>
                   </div>
 
                   <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="space-y-6">
                       <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><User size={14}/> Cliente</h4>
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                          <User size={14}/> Cliente
+                        </h4>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
                           <p className="font-bold text-slate-800 text-lg">{o.full_name}</p>
-                          <div className="space-y-1"><p className="text-slate-500 text-sm flex items-center gap-2"><Mail size={14}/> {o.email}</p><p className="text-slate-500 text-sm flex items-center gap-2"><Phone size={14}/> {o.phone}</p></div>
+                          <div className="space-y-1">
+                            <p className="text-slate-500 text-sm flex items-center gap-2"><Mail size={14}/> {o.email}</p>
+                            <p className="text-slate-500 text-sm flex items-center gap-2"><Phone size={14}/> {o.phone}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
 
                     <div className="lg:col-span-2 flex flex-col h-full">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><Package size={14}/> Itens</h4>
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+                        <Package size={14}/> Itens
+                      </h4>
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
                         {Array.isArray(o.items) && o.items.length > 0 ? (
                           <div className="overflow-x-auto">
@@ -566,9 +593,15 @@ export default function App() {
                               <tbody className="divide-y divide-slate-100">
                                 {o.items.map((item, idx) => (
                                   <tr key={idx} className="hover:bg-slate-50/50">
-                                    <td className="p-3 pl-4"><span className="font-medium text-slate-700">{item.name}</span></td>
-                                    <td className="p-3 text-center"><span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span></td>
-                                    <td className="p-3 text-right pr-4 font-medium text-slate-600">{formatMoney(Number(item.unit_price) * Number(item.quantity))}</td>
+                                    <td className="p-3 pl-4">
+                                        <span className="font-medium text-slate-700">{item.name}</span>
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span>
+                                    </td>
+                                    <td className="p-3 text-right pr-4 font-medium text-slate-600">
+                                      {formatMoney(Number(item.unit_price) * Number(item.quantity))}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -578,7 +611,10 @@ export default function App() {
                       </div>
                       <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center">
                         <span className="text-green-800 text-sm font-bold uppercase tracking-wide">Total</span>
-                        <div className="flex items-center gap-1 text-2xl font-extrabold text-green-600"><DollarSign size={20} className="mt-1"/>{formatMoney(o.total_amount)}</div>
+                        <div className="flex items-center gap-1 text-2xl font-extrabold text-green-600">
+                          <DollarSign size={20} className="mt-1"/>
+                          {formatMoney(o.total_amount)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -589,7 +625,7 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: LOGS */}
+        {/* VIEW: LOGS DO SERVIDOR */}
         {view === 'LOGS' && (
           <div className="animate-enter max-w-5xl mx-auto">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -622,7 +658,9 @@ export default function App() {
                         logs.map((log, index) => (
                             <div key={index} className="flex gap-3 text-slate-300 hover:bg-slate-800/50 p-2 rounded transition-colors border-l-2 border-transparent hover:border-yellow-500">
                                 <span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                                <span className={`font-bold shrink-0 ${log.type === 'ACCESS_DENIED' || log.type === 'BLOCK' ? 'text-red-500' : 'text-blue-400'}`}>{log.type}</span>
+                                <span className={`font-bold shrink-0 ${log.type === 'ACCESS_DENIED' || log.type === 'BLOCK' ? 'text-red-500' : 'text-blue-400'}`}>
+                                    {log.type}
+                                </span>
                                 <span className="text-slate-400 shrink-0">{log.ip}</span>
                                 <span className="text-white break-all">{log.message}</span>
                             </div>
@@ -662,40 +700,83 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: FORMULÁRIO */}
+        {/* VIEW: FORMULÁRIO PRODUTO */}
         {view === 'PROD_FORM' && (
           <div className="max-w-2xl mx-auto animate-enter pb-10">
              <button onClick={() => setView('PRODUCTS')} className="mb-4 text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium"><X size={20}/> Cancelar e voltar</button>
              <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
                <div className="bg-slate-900 p-6 text-white flex justify-between items-center relative overflow-hidden">
-                  <div className="relative z-10"><h2 className="font-bold text-xl">{editingId ? 'Editar Produto' : 'Cadastrar Produto'}</h2><p className="text-slate-400 text-sm mt-1">Preencha as informações.</p></div>
+                  <div className="relative z-10">
+                    <h2 className="font-bold text-xl">{editingId ? 'Editar Produto' : 'Cadastrar Produto'}</h2>
+                    <p className="text-slate-400 text-sm mt-1">Preencha as informações abaixo.</p>
+                  </div>
                   <img src="https://i.imgur.com/Q3oTWj1.png" className="h-12 opacity-20 absolute right-4 rotate-12" alt="logo"/>
                </div>
                <form onSubmit={handleSaveProd} className="p-8 space-y-6">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="col-span-1 md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-1">Nome do Produto</label><input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.name} onChange={e=>setProdForm({...prodForm, name: e.target.value})}/></div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Embalagem</label><select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.packaging} onChange={e=>{const pkg = e.target.value; setProdForm({...prodForm, packaging: pkg, volume: pkg==='Garrafa PET'?'1L':'700ml'});}}><option>Garrafa PET</option><option>Garrafa de Vidro</option></select></div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Tipo</label><select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.type} onChange={e=>setProdForm({...prodForm, type: e.target.value})}><option>Curtida</option><option>Doce</option></select></div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Preço (R$)</label><input required type="number" step="0.01" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/></div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Teor Alcoólico (%)</label><input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/></div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Estoque</label><input type="number" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.stock_quantity} onChange={e=>setProdForm({...prodForm, stock_quantity: e.target.value})}/></div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Imagem URL</label><input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/></div>
-                    <div className="col-span-1 md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label><textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none" value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/></div>
+                    <div className="col-span-1 md:col-span-2">
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Produto</label>
+                        <input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 outline-none" 
+                            value={prodForm.name} onChange={e=>setProdForm({...prodForm, name: e.target.value})}/>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Embalagem</label>
+                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.packaging} onChange={e=>{
+                            const pkg = e.target.value;
+                            setProdForm({...prodForm, packaging: pkg, volume: pkg==='Garrafa PET'?'1L':'700ml'});
+                        }}>
+                            <option>Garrafa PET</option><option>Garrafa de Vidro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Tipo</label>
+                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.type} onChange={e=>setProdForm({...prodForm, type: e.target.value})}>
+                            <option>Curtida</option><option>Doce</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Preço (R$)</label>
+                        <input required type="number" step="0.01" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Teor Alcoólico (%)</label>
+                        <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/>
+                    </div>
+                    
+                    {/* CAMPO DE ESTOQUE NO FORMULÁRIO */}
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Quantidade em Estoque</label>
+                        <input type="number" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" value={prodForm.stock_quantity} onChange={e=>setProdForm({...prodForm, stock_quantity: e.target.value})}/>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">URL da Imagem</label>
+                        <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>
+                    </div>
+
+                    <div className="col-span-1 md:col-span-2">
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label>
+                        <textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none" value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/>
+                    </div>
                  </div>
-                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={20}/> Salvar e Fechar</button>
+                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+                    <Save size={20}/> Salvar e Fechar
+                 </button>
                </form>
              </div>
           </div>
         )}
 
+        {/* MODAL EXCLUSÃO */}
         {deleteModal.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-enter">
             <div className="bg-white rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl border border-slate-200">
               <AlertTriangle className="text-red-600 mx-auto mb-4" size={32} />
               <h3 className="text-xl font-bold mb-2 text-slate-800">Tem certeza?</h3>
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setDeleteModal({open:false,type:null,id:null})} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold">Cancelar</button>
-                <button onClick={confirmDelete} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold">Confirmar</button>
+              <p className="text-slate-500 text-sm mb-8">Esta ação não poderá ser desfeita.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteModal({open:false,type:null,id:null})} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200">Cancelar</button>
+                <button onClick={confirmDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg">Confirmar</button>
               </div>
             </div>
           </div>
@@ -703,7 +784,14 @@ export default function App() {
         </div>
       </main>
 
-      <style>{`.animate-enter { animation: enter 0.4s cubic-bezier(0.16, 1, 0.3, 1); } @keyframes enter { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } } ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }`}</style>
+      <style>{`
+        .animate-enter { animation: enter 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes enter { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
     </div>
   );
 }
