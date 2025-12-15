@@ -125,16 +125,20 @@ export default function App() {
   // --- POLLING (VENDAS) ---
   useEffect(() => {
     let interval: any;
-    if (isAuthorized && view === 'SALES') {
-        loadOrders(); 
-        interval = setInterval(loadOrders, 5000); 
+    if (isAuthorized) {
+        // Atualiza vendas se estiver na tela de vendas
+        if (view === 'SALES') loadOrders();
+        
+        // Atualiza produtos (estoque) se estiver na tela de produtos
+        if (view === 'PRODUCTS') loadProducts();
+
+        interval = setInterval(() => {
+            if (view === 'SALES') loadOrders();
+            if (view === 'PRODUCTS') loadProducts();
+        }, 5000); 
     }
     return () => clearInterval(interval);
   }, [view, isAuthorized]);
-
-  // --- LOGS (SSE) ---
-  useEffect(() => {
-    if (!isAuthorized) return;
 
     // Conecta sem token, confiando no IP
     const eventSource = new EventSource(`${API_URL}/api/logs/stream`);
