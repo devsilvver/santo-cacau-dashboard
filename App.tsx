@@ -15,14 +15,14 @@ import {
   Mail,
   User,
   Menu,
-  LogOut,
   Lock,
   Loader2,
   Github,
   Package,
   Clock,
   Hash,
-  DollarSign
+  DollarSign,
+  Terminal // Ícone novo para os logs
 } from 'lucide-react';
 
 // URL da API
@@ -34,7 +34,6 @@ interface Product {
   image_url: string; packaging: string; type: string; abv: number; volume: string;
 }
 
-// Interface detalhada para os itens do pedido
 interface OrderItem {
   name: string; quantity: number; unit_price: number; image: string;
 }
@@ -50,18 +49,30 @@ interface AllowedIp {
   id: number; ip_address: string; description: string; created_at: string;
 }
 
+// NOVA INTERFACE PARA LOGS
+interface LogMessage {
+  type: string;
+  ip: string;
+  timestamp: string;
+  message: string;
+}
+
 export default function App() {
   // --- ESTADOS DE CONTROLE DE ACESSO ---
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   // --- ESTADOS DE NAVEGAÇÃO E DADOS ---
-  const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY'>('PRODUCTS');
+  const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY' | 'LOGS'>('PRODUCTS');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ips, setIps] = useState<AllowedIp[]>([]);
+  
+  // NOVO ESTADO DE LOGS
+  const [logs, setLogs] = useState<LogMessage[]>([]);
+  
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -86,7 +97,7 @@ export default function App() {
           setIsAuthorized(false);
         } else if (res.ok) {
           setIsAuthorized(true);
-          loadProducts(); // Carrega produtos iniciais
+          loadProducts(); 
         } else {
           setIsAuthorized(false);
         }
@@ -99,7 +110,7 @@ export default function App() {
     verifyAccess();
   }, []);
 
-  // --- POLLING (ATUALIZAÇÃO EM TEMPO REAL) ---
+  // --- POLLING (VENDAS) ---
   useEffect(() => {
     let interval: any;
     if (isAuthorized && view === 'SALES') {
@@ -109,8 +120,33 @@ export default function App() {
     return () => clearInterval(interval);
   }, [view, isAuthorized]);
 
+  // --- NOVO: LISTENER DE LOGS (SSE) ---
+  useEffect(() => {
+    if (!isAuthorized) return;
+
+    // Conecta na rota de stream
+    const eventSource = new EventSource(`${API_URL}/api/logs/stream`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const newLog: LogMessage = JSON.parse(event.data);
+        setLogs(prevLogs => [newLog, ...prevLogs]); // Adiciona o log no topo da lista
+      } catch (err) {
+        console.error("Erro ao processar log:", err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("Erro na conexão SSE, tentando reconectar...", err);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [isAuthorized]);
+
   // --- CARREGAMENTO DE DADOS ---
-  
   const loadProducts = async () => {
     setLoading(true);
     try {
@@ -182,15 +218,12 @@ export default function App() {
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // --- CORREÇÃO IMPORTANTE DE VALIDAÇÃO ---
-    // 1. Substitui vírgula por ponto para evitar erro de banco de dados
     const priceString = String(prodForm.price).replace(',', '.');
     const abvString = String(prodForm.abv).replace(',', '.');
     
     const priceFinal = parseFloat(priceString);
     const abvFinal = parseFloat(abvString);
 
-    // 2. Valida se é número real
     if (isNaN(priceFinal) || isNaN(abvFinal)) {
         alert("Erro: O preço e o teor alcoólico devem ser números válidos (Ex: 29.90).");
         return;
@@ -217,11 +250,9 @@ export default function App() {
       if (res.ok) { 
           setView('PRODUCTS'); 
           loadProducts(); 
-          // Limpa o form se for novo
           if (!editingId) handleCreateProd();
       }
       else { 
-          // --- MOSTRA O ERRO REAL DO SERVIDOR ---
           try {
               const errorData = await res.json();
               alert('Erro do Servidor: ' + (errorData.error || errorData.message || 'Falha desconhecida ao salvar.'));
@@ -372,6 +403,12 @@ export default function App() {
           <button onClick={() => navClick('SECURITY')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${view === 'SECURITY' ? 'bg-yellow-500 text-slate-900 font-bold shadow-lg shadow-yellow-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
             <Shield size={20} className={view === 'SECURITY' ? '' : 'group-hover:text-yellow-500 transition-colors'}/> Segurança
           </button>
+          
+          {/* BOTÃO DE LOGS (NOVO) */}
+          <button onClick={() => navClick('LOGS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${view === 'LOGS' ? 'bg-yellow-500 text-slate-900 font-bold shadow-lg shadow-yellow-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+            <Terminal size={20} className={view === 'LOGS' ? '' : 'group-hover:text-yellow-500 transition-colors'}/> Logs (Ao Vivo)
+            {logs.length > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">{logs.length > 99 ? '99+' : logs.length}</span>}
+          </button>
         </nav>
 
         {/* RODAPÉ COM CRÉDITOS */}
@@ -457,7 +494,7 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: VENDAS (APRIMORADA E CORRIGIDA) */}
+        {/* VIEW: VENDAS */}
         {view === 'SALES' && (
           <div className="animate-enter pb-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -598,6 +635,55 @@ export default function App() {
                     <p className="text-slate-500 max-w-sm mx-auto">As vendas aparecerão aqui automaticamente assim que seus clientes finalizarem os pedidos no site.</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW: LOGS DO SERVIDOR (NOVO) */}
+        {view === 'LOGS' && (
+          <div className="animate-enter max-w-5xl mx-auto">
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+              <div>
+                <h2 className="text-3xl font-bold text-slate-800">Logs do Servidor</h2>
+                <p className="text-slate-500 mt-1">Monitoramento de bloqueios e eventos em tempo real.</p>
+              </div>
+              <div className="flex gap-2">
+                 <button onClick={() => setLogs([])} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors">Limpar</button>
+                 <div className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm animate-pulse">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span> CONECTADO
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 rounded-2xl shadow-xl border border-slate-800 overflow-hidden font-mono text-sm">
+                <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    </div>
+                    <span className="text-slate-500 text-xs">console output</span>
+                </div>
+                
+                <div className="p-4 max-h-[600px] overflow-y-auto space-y-2">
+                    {logs.length === 0 ? (
+                        <div className="text-slate-600 text-center py-12 italic">
+                            Aguardando eventos... <br/>
+                            <span className="text-xs opacity-50">Tente acessar a API de um IP não autorizado para testar.</span>
+                        </div>
+                    ) : (
+                        logs.map((log, index) => (
+                            <div key={index} className="flex gap-3 text-slate-300 hover:bg-slate-800/50 p-2 rounded transition-colors border-l-2 border-transparent hover:border-yellow-500">
+                                <span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                <span className={`font-bold shrink-0 ${log.type === 'ACCESS_DENIED' || log.type === 'BLOCK' ? 'text-red-500' : 'text-blue-400'}`}>
+                                    {log.type}
+                                </span>
+                                <span className="text-slate-400 shrink-0">{log.ip}</span>
+                                <span className="text-white break-all">{log.message}</span>
+                            </div>
+                        ))
+                    )}
+                </div>
             </div>
           </div>
         )}
