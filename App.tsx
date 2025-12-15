@@ -22,7 +22,9 @@ import {
   Clock,
   Hash,
   DollarSign,
-  Terminal // Ícone novo para os logs
+  Terminal,
+  Minus, // Novo ícone
+  Plus   // Novo ícone
 } from 'lucide-react';
 
 // URL da API
@@ -30,8 +32,16 @@ const API_URL = 'https://api-celeiro-da-cachaca.onrender.com';
 
 // --- INTERFACES ---
 interface Product {
-  id: string; name: string; description: string; price: number;
-  image_url: string; packaging: string; type: string; abv: number; volume: string;
+  id: string; 
+  name: string; 
+  description: string; 
+  price: number;
+  image_url: string; 
+  packaging: string; 
+  type: string; 
+  abv: number; 
+  volume: string;
+  stock_quantity: number; // Campo de estoque
 }
 
 interface OrderItem {
@@ -49,7 +59,6 @@ interface AllowedIp {
   id: number; ip_address: string; description: string; created_at: string;
 }
 
-// NOVA INTERFACE PARA LOGS
 interface LogMessage {
   type: string;
   ip: string;
@@ -69,8 +78,6 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ips, setIps] = useState<AllowedIp[]>([]);
-  
-  // NOVO ESTADO DE LOGS
   const [logs, setLogs] = useState<LogMessage[]>([]);
   
   const [loading, setLoading] = useState(false);
@@ -78,35 +85,40 @@ export default function App() {
 
   // --- ESTADOS DE FORMULÁRIOS ---
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Form atualizado com estoque
   const [prodForm, setProdForm] = useState({
     name: '', description: '', price: '', packaging: 'Garrafa PET',
-    type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L'
+    type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L', stock_quantity: '0'
   });
+  
   const [ipForm, setIpForm] = useState({ ip: '', desc: '' });
 
   const [deleteModal, setDeleteModal] = useState<{open: boolean, type: 'PROD'|'IP'|null, id: string|number|null}>({
     open: false, type: null, id: null
   });
 
-  // --- VERIFICAÇÃO INICIAL ---
-  useEffect(() => {
-    const verifyAccess = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/allowed-ips`);
-        if (res.status === 403) {
-          setIsAuthorized(false);
-        } else if (res.ok) {
-          setIsAuthorized(true);
-          loadProducts(); 
-        } else {
-          setIsAuthorized(false);
-        }
-      } catch (error) {
+  // --- VERIFICAÇÃO INICIAL (IP) ---
+  const verifyAccess = async () => {
+    setIsCheckingAuth(true);
+    try {
+      const res = await fetch(`${API_URL}/api/allowed-ips`);
+      if (res.status === 403) {
         setIsAuthorized(false);
-      } finally {
-        setIsCheckingAuth(false);
+      } else if (res.ok) {
+        setIsAuthorized(true);
+        loadProducts(); 
+      } else {
+        setIsAuthorized(false);
       }
-    };
+    } catch (error) {
+      setIsAuthorized(false);
+    } finally {
+      setIsCheckingAuth(false);
+    }
+  };
+
+  useEffect(() => {
     verifyAccess();
   }, []);
 
@@ -120,24 +132,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, [view, isAuthorized]);
 
-  // --- NOVO: LISTENER DE LOGS (SSE) ---
+  // --- LOGS (SSE) ---
   useEffect(() => {
     if (!isAuthorized) return;
 
-    // Conecta na rota de stream
+    // Conecta sem token, confiando no IP
     const eventSource = new EventSource(`${API_URL}/api/logs/stream`);
 
     eventSource.onmessage = (event) => {
       try {
         const newLog: LogMessage = JSON.parse(event.data);
-        setLogs(prevLogs => [newLog, ...prevLogs]); // Adiciona o log no topo da lista
+        setLogs(prevLogs => [newLog, ...prevLogs]); 
       } catch (err) {
         console.error("Erro ao processar log:", err);
       }
     };
 
     eventSource.onerror = (err) => {
-      console.error("Erro na conexão SSE, tentando reconectar...", err);
+      console.error("Erro na conexão SSE:", err);
       eventSource.close();
     };
 
@@ -215,6 +227,7 @@ export default function App() {
 
   // --- HANDLERS (AÇÕES) ---
 
+  // Função para salvar produto (Create/Update)
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -225,14 +238,15 @@ export default function App() {
     const abvFinal = parseFloat(abvString);
 
     if (isNaN(priceFinal) || isNaN(abvFinal)) {
-        alert("Erro: O preço e o teor alcoólico devem ser números válidos (Ex: 29.90).");
+        alert("Erro: O preço e o teor alcoólico devem ser números válidos.");
         return;
     }
 
     const payload = { 
         ...prodForm, 
         price: priceFinal, 
-        abv: abvFinal 
+        abv: abvFinal,
+        stock_quantity: Number(prodForm.stock_quantity) // Envia o estoque
     };
     
     const method = editingId ? 'PUT' : 'POST';
@@ -248,21 +262,46 @@ export default function App() {
       if (res.status === 403) { setIsAuthorized(false); return; }
 
       if (res.ok) { 
-          setView('PRODUCTS'); 
-          loadProducts(); 
+          // 1. Recarrega a lista para pegar os dados novos
+          await loadProducts(); 
+          // 2. Limpa o form (opcional, já que vamos fechar)
           if (!editingId) handleCreateProd();
+          // 3. FECHA A TELA AUTOMATICAMENTE
+          setView('PRODUCTS');
       }
       else { 
           try {
               const errorData = await res.json();
-              alert('Erro do Servidor: ' + (errorData.error || errorData.message || 'Falha desconhecida ao salvar.'));
+              alert('Erro do Servidor: ' + (errorData.error || errorData.message));
           } catch (jsonError) {
-              alert('Erro ao salvar. Verifique se todos os campos estão preenchidos corretamente.');
+              alert('Erro ao salvar produto.');
           }
       }
     } catch (e) { 
         console.error(e);
-        alert('Erro de conexão. A API pode estar offline.'); 
+        alert('Erro de conexão.'); 
+    }
+  };
+
+  // Função para Atualização Rápida de Estoque
+  const updateStock = async (id: string, currentStock: number, change: number) => {
+    // Calcula novo estoque (não deixa descer de 0)
+    const newStock = Math.max(0, currentStock + change);
+    
+    // Atualização Otimista (muda na tela antes de confirmar no server)
+    setProducts(products.map(p => p.id === id ? {...p, stock_quantity: newStock} : p));
+
+    try {
+        const res = await fetch(`${API_URL}/api/products/${id}/stock`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ quantity: newStock })
+        });
+
+        if (!res.ok) throw new Error();
+    } catch (e) {
+        alert('Erro ao atualizar estoque');
+        loadProducts(); // Reverte em caso de erro
     }
   };
 
@@ -271,7 +310,8 @@ export default function App() {
     setProdForm({
       name: p.name, description: p.description, price: String(p.price),
       packaging: p.packaging, type: p.type, imageUrl: p.image_url,
-      abv: String(p.abv), volume: p.volume
+      abv: String(p.abv), volume: p.volume,
+      stock_quantity: String(p.stock_quantity) // Carrega o estoque atual
     });
     setView('PROD_FORM');
     setIsSidebarOpen(false);
@@ -281,7 +321,8 @@ export default function App() {
     setEditingId(null);
     setProdForm({
         name: '', description: '', price: '', packaging: 'Garrafa PET',
-        type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L'
+        type: 'Curtida', imageUrl: '', abv: '38.0', volume: '1L',
+        stock_quantity: '0' // Estoque inicial
     });
     setView('PROD_FORM');
   }
@@ -394,39 +435,21 @@ export default function App() {
         </div>
         
         <nav className="flex-1 px-4 space-y-2 mt-6 overflow-y-auto">
-          <button onClick={() => navClick('PRODUCTS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${view === 'PRODUCTS' || view === 'PROD_FORM' ? 'bg-yellow-500 text-slate-900 font-bold shadow-lg shadow-yellow-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-            <LayoutDashboard size={20} className={view === 'PRODUCTS' ? '' : 'group-hover:text-yellow-500 transition-colors'} /> Produtos
-          </button>
-          <button onClick={() => navClick('SALES')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${view === 'SALES' ? 'bg-yellow-500 text-slate-900 font-bold shadow-lg shadow-yellow-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-            <ShoppingBag size={20} className={view === 'SALES' ? '' : 'group-hover:text-yellow-500 transition-colors'}/> Vendas
-          </button>
-          <button onClick={() => navClick('SECURITY')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${view === 'SECURITY' ? 'bg-yellow-500 text-slate-900 font-bold shadow-lg shadow-yellow-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-            <Shield size={20} className={view === 'SECURITY' ? '' : 'group-hover:text-yellow-500 transition-colors'}/> Segurança
-          </button>
-          
-          {/* BOTÃO DE LOGS (NOVO) */}
-          <button onClick={() => navClick('LOGS')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${view === 'LOGS' ? 'bg-yellow-500 text-slate-900 font-bold shadow-lg shadow-yellow-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-            <Terminal size={20} className={view === 'LOGS' ? '' : 'group-hover:text-yellow-500 transition-colors'}/> Logs (Ao Vivo)
-            {logs.length > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">{logs.length > 99 ? '99+' : logs.length}</span>}
-          </button>
+          {[
+            { id: 'PRODUCTS', icon: LayoutDashboard, label: 'Produtos' },
+            { id: 'SALES', icon: ShoppingBag, label: 'Vendas' },
+            { id: 'SECURITY', icon: Shield, label: 'Segurança' },
+            { id: 'LOGS', icon: Terminal, label: 'Logs' }
+          ].map(item => (
+            <button key={item.id} onClick={() => navClick(item.id)} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${view === item.id ? 'bg-yellow-500 text-slate-900 font-bold shadow-lg shadow-yellow-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+              <item.icon size={20} className={view === item.id ? '' : 'group-hover:text-yellow-500 transition-colors'} /> {item.label}
+              {item.id === 'LOGS' && logs.length > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">{logs.length > 99 ? '99+' : logs.length}</span>}
+            </button>
+          ))}
         </nav>
 
-        {/* RODAPÉ COM CRÉDITOS */}
         <div className="p-6 border-t border-slate-800 bg-slate-950/30 text-center">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">
-              &copy; 2025 Celeiro da Cachaça
-            </p>
-            <p className="text-xs text-slate-400 flex flex-col items-center gap-1">
-              <span>Desenvolvido por</span>
-              <a 
-                href="https://github.com/devsilvver" 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-yellow-500 hover:text-yellow-400 font-bold transition-colors flex items-center gap-1.5 bg-slate-800/50 px-3 py-1.5 rounded-full hover:bg-slate-800"
-              >
-                <Github size={14} /> Guilherme Silvestrini
-              </a>
-            </p>
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">&copy; 2025 Celeiro da Cachaça</p>
         </div>
       </aside>
 
@@ -459,7 +482,12 @@ export default function App() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left min-w-[800px]">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold tracking-wider">
-                    <tr><th className="px-6 py-4">Produto</th><th className="px-6 py-4">Detalhes</th><th className="px-6 py-4">Preço</th><th className="px-6 py-4 text-right">Ações</th></tr>
+                    <tr>
+                      <th className="px-6 py-4">Produto</th>
+                      <th className="px-6 py-4">Estoque</th> {/* COLUNA NOVA */}
+                      <th className="px-6 py-4">Preço</th>
+                      <th className="px-6 py-4 text-right">Ações</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {products.filter(p=>p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
@@ -469,13 +497,30 @@ export default function App() {
                                 <div className="w-12 h-12 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-1 shadow-sm">
                                     <img src={p.image_url} className="w-full h-full object-contain" alt="" />
                                 </div>
-                                <span className="font-semibold text-slate-700">{p.name}</span>
+                                <div>
+                                    <span className="font-semibold text-slate-700 block">{p.name}</span>
+                                    <span className="text-xs text-slate-400">{p.packaging}</span>
+                                </div>
                             </div>
                         </td>
+                        {/* CONTROLE RÁPIDO DE ESTOQUE */}
                         <td className="px-6 py-3">
-                            <div className="flex flex-col gap-1">
-                                <span className="text-sm font-medium text-slate-600">{p.type}</span>
-                                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded w-fit">{p.packaging}</span>
+                            <div className="flex items-center gap-2 bg-slate-100 w-fit px-2 py-1.5 rounded-xl border border-slate-200">
+                                <button 
+                                    onClick={() => updateStock(p.id, p.stock_quantity, -1)} 
+                                    className="p-1 hover:bg-white rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                    <Minus size={14}/>
+                                </button>
+                                <span className={`font-mono font-bold min-w-[24px] text-center text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`}>
+                                    {p.stock_quantity}
+                                </span>
+                                <button 
+                                    onClick={() => updateStock(p.id, p.stock_quantity, 1)} 
+                                    className="p-1 hover:bg-white rounded-lg text-slate-400 hover:text-green-500 transition-colors"
+                                >
+                                    <Plus size={14}/>
+                                </button>
                             </div>
                         </td>
                         <td className="px-6 py-3 font-bold text-green-600">{formatMoney(p.price)}</td>
@@ -510,89 +555,49 @@ export default function App() {
             <div className="grid gap-6">
               {orders.map(o => (
                 <div key={o.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300">
-                  {/* Cabeçalho do Pedido */}
                   <div className="bg-slate-50/80 p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4">
                     <div className="flex items-center gap-4">
                       <div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">
                         #{o.id}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">
-                          <Clock size={12}/> Data do Pedido
-                        </div>
                         <p className="text-sm font-medium text-slate-700">{formatDate(o.created_at)}</p>
                       </div>
-                      <div className="hidden md:block w-px h-8 bg-slate-200 mx-2"></div>
-                      <div className="hidden md:block">
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">
-                          <Hash size={12}/> Ref. Pagamento
-                        </div>
-                        <p className="text-sm font-mono text-slate-600">{o.mp_payment_id || '---'}</p>
-                      </div>
                     </div>
-                    
                     <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(o.status)}`}>
                       {translateStatus(o.status)}
                     </div>
                   </div>
 
                   <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Coluna 1: Dados do Cliente */}
                     <div className="space-y-6">
                       <div>
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                          <User size={14}/> Dados do Cliente
+                          <User size={14}/> Cliente
                         </h4>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
                           <p className="font-bold text-slate-800 text-lg">{o.full_name}</p>
                           <div className="space-y-1">
-                            <p className="text-slate-500 text-sm flex items-center gap-2 hover:text-yellow-600 transition-colors">
-                              <Mail size={14}/> {o.email}
-                            </p>
-                            <p className="text-slate-500 text-sm flex items-center gap-2 hover:text-yellow-600 transition-colors">
-                              <Phone size={14}/> {o.phone}
-                            </p>
+                            <p className="text-slate-500 text-sm flex items-center gap-2"><Mail size={14}/> {o.email}</p>
+                            <p className="text-slate-500 text-sm flex items-center gap-2"><Phone size={14}/> {o.phone}</p>
                           </div>
                         </div>
                       </div>
-
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                          <MapPin size={14}/> Endereço de Entrega
-                        </h4>
-                        <p className="text-sm text-slate-600 leading-relaxed bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                          {o.shipping_address}
-                        </p>
-                      </div>
                     </div>
 
-                    {/* Coluna 2: Itens do Pedido (Ocupa 2 colunas no desktop) */}
                     <div className="lg:col-span-2 flex flex-col h-full">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                        <Package size={14}/> Itens do Pedido
+                        <Package size={14}/> Itens
                       </h4>
-                      
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
                         {Array.isArray(o.items) && o.items.length > 0 ? (
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm">
-                              <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase border-b border-slate-100">
-                                <tr>
-                                  <th className="p-3 pl-4">Produto</th>
-                                  <th className="p-3 text-center">Qtd</th>
-                                  <th className="p-3 text-right pr-4">Total Item</th>
-                                </tr>
-                              </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {o.items.map((item, idx) => (
                                   <tr key={idx} className="hover:bg-slate-50/50">
                                     <td className="p-3 pl-4">
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-white rounded-lg border border-slate-100 flex items-center justify-center p-0.5 shrink-0">
-                                          <img src={item.image} className="w-full h-full object-contain" alt=""/>
-                                        </div>
-                                        <span className="font-medium text-slate-700 line-clamp-1">{item.name}</span>
-                                      </div>
+                                        <span className="font-medium text-slate-700">{item.name}</span>
                                     </td>
                                     <td className="p-3 text-center">
                                       <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span>
@@ -605,17 +610,10 @@ export default function App() {
                               </tbody>
                             </table>
                           </div>
-                        ) : (
-                          <div className="p-8 text-center text-slate-400 flex flex-col items-center">
-                            <Package size={32} className="mb-2 opacity-20"/>
-                            <p className="text-sm">Detalhes dos itens indisponíveis.</p>
-                          </div>
-                        )}
+                        ) : (<div className="p-8 text-center text-slate-400">Detalhes indisponíveis.</div>)}
                       </div>
-
-                      {/* Resumo Financeiro */}
                       <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center">
-                        <span className="text-green-800 text-sm font-bold uppercase tracking-wide">Valor Total</span>
+                        <span className="text-green-800 text-sm font-bold uppercase tracking-wide">Total</span>
                         <div className="flex items-center gap-1 text-2xl font-extrabold text-green-600">
                           <DollarSign size={20} className="mt-1"/>
                           {formatMoney(o.total_amount)}
@@ -625,27 +623,18 @@ export default function App() {
                   </div>
                 </div>
               ))}
-
-              {!loading && orders.length === 0 && (
-                <div className="text-center py-24 px-6 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                    <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                        <ShoppingBag size={40} className="text-slate-300"/>
-                    </div>
-                    <h3 className="text-slate-900 font-bold text-xl mb-2">Nenhuma venda registrada</h3>
-                    <p className="text-slate-500 max-w-sm mx-auto">As vendas aparecerão aqui automaticamente assim que seus clientes finalizarem os pedidos no site.</p>
-                </div>
-              )}
+              {!loading && orders.length === 0 && <div className="text-center py-24 text-slate-400">Nenhuma venda registrada.</div>}
             </div>
           </div>
         )}
 
-        {/* VIEW: LOGS DO SERVIDOR (NOVO) */}
+        {/* VIEW: LOGS DO SERVIDOR */}
         {view === 'LOGS' && (
           <div className="animate-enter max-w-5xl mx-auto">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
               <div>
                 <h2 className="text-3xl font-bold text-slate-800">Logs do Servidor</h2>
-                <p className="text-slate-500 mt-1">Monitoramento de bloqueios e eventos em tempo real.</p>
+                <p className="text-slate-500 mt-1">Monitoramento em tempo real.</p>
               </div>
               <div className="flex gap-2">
                  <button onClick={() => setLogs([])} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors">Limpar</button>
@@ -667,10 +656,7 @@ export default function App() {
                 
                 <div className="p-4 max-h-[600px] overflow-y-auto space-y-2">
                     {logs.length === 0 ? (
-                        <div className="text-slate-600 text-center py-12 italic">
-                            Aguardando eventos... <br/>
-                            <span className="text-xs opacity-50">Tente acessar a API de um IP não autorizado para testar.</span>
-                        </div>
+                        <div className="text-slate-600 text-center py-12 italic">Aguardando eventos...</div>
                     ) : (
                         logs.map((log, index) => (
                             <div key={index} className="flex gap-3 text-slate-300 hover:bg-slate-800/50 p-2 rounded transition-colors border-l-2 border-transparent hover:border-yellow-500">
@@ -688,47 +674,31 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW: SEGURANÇA (IPS) */}
+        {/* VIEW: SEGURANÇA */}
         {view === 'SECURITY' && (
           <div className="max-w-4xl mx-auto animate-enter">
-            <h2 className="text-3xl font-bold text-slate-800 mb-2">Controle de Acesso</h2>
-            <p className="text-slate-500 mb-8">Gerencie quais dispositivos podem acessar este painel administrativo.</p>
-            
+            <h2 className="text-3xl font-bold text-slate-800 mb-6">Segurança</h2>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} className="text-green-600"/> Liberar Novo Acesso</h3>
               <form onSubmit={handleSaveIp} className="flex flex-col md:flex-row gap-4 items-end">
-                <div className="w-full md:flex-1">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Endereço IP</label>
-                    <input placeholder="Ex: 177.123.45.67" className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none" value={ipForm.ip} onChange={e => setIpForm({...ipForm, ip: e.target.value})} />
-                </div>
-                <div className="w-full md:flex-[2]">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label>
-                    <input placeholder="Ex: Computador da Loja" className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none" value={ipForm.desc} onChange={e => setIpForm({...ipForm, desc: e.target.value})} />
-                </div>
-                <button type="submit" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-green-600/20 active:scale-95 transition-all">Salvar</button>
+                <div className="w-full md:flex-1"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">IP</label><input className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none" value={ipForm.ip} onChange={e => setIpForm({...ipForm, ip: e.target.value})} /></div>
+                <div className="w-full md:flex-[2]"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label><input className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none" value={ipForm.desc} onChange={e => setIpForm({...ipForm, desc: e.target.value})} /></div>
+                <button type="submit" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-xl font-bold">Salvar</button>
               </form>
             </div>
-
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left min-w-[600px]">
-                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold tracking-wider">
-                    <tr><th className="px-6 py-4">IP</th><th className="px-6 py-4">Descrição</th><th className="px-6 py-4">Data</th><th className="px-6 py-4 text-right">Ação</th></tr>
-                  </thead>
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold"><tr><th className="px-6 py-4">IP</th><th className="px-6 py-4">Descrição</th><th className="px-6 py-4 text-right">Ação</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {ips.map(ip => (
-                      <tr key={ip.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 font-mono text-slate-600 bg-slate-50/50 w-fit rounded-r-lg">{ip.ip_address}</td>
-                        <td className="px-6 py-4 font-medium text-slate-800">{ip.description}</td>
-                        <td className="px-6 py-4 text-sm text-slate-500">{formatDate(ip.created_at)}</td>
-                        <td className="px-6 py-4 text-right">
-                          <button onClick={() => setDeleteModal({open:true, type:'IP', id: ip.id})} className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                        </td>
+                      <tr key={ip.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-4 font-mono text-slate-600">{ip.ip_address}</td>
+                        <td className="px-6 py-4">{ip.description}</td>
+                        <td className="px-6 py-4 text-right"><button onClick={() => setDeleteModal({open:true, type:'IP', id: ip.id})} className="text-red-500"><Trash2 size={18}/></button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
             </div>
           </div>
         )}
@@ -749,12 +719,12 @@ export default function App() {
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Produto</label>
-                        <input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none transition-all" 
+                        <input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 outline-none" 
                             value={prodForm.name} onChange={e=>setProdForm({...prodForm, name: e.target.value})}/>
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">Embalagem</label>
-                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none bg-white" value={prodForm.packaging} onChange={e=>{
+                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.packaging} onChange={e=>{
                             const pkg = e.target.value;
                             setProdForm({...prodForm, packaging: pkg, volume: pkg==='Garrafa PET'?'1L':'700ml'});
                         }}>
@@ -763,32 +733,37 @@ export default function App() {
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">Tipo</label>
-                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none bg-white" value={prodForm.type} onChange={e=>setProdForm({...prodForm, type: e.target.value})}>
+                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.type} onChange={e=>setProdForm({...prodForm, type: e.target.value})}>
                             <option>Curtida</option><option>Doce</option>
                         </select>
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">Preço (R$)</label>
-                        <input required type="number" step="0.01" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none" value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/>
+                        <input required type="number" step="0.01" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/>
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">Teor Alcoólico (%)</label>
-                        <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none" value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/>
+                        <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/>
                     </div>
-                    <div className="col-span-1 md:col-span-2">
+                    
+                    {/* NOVO CAMPO DE ESTOQUE NO FORMULÁRIO */}
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Quantidade em Estoque</label>
+                        <input type="number" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" value={prodForm.stock_quantity} onChange={e=>setProdForm({...prodForm, stock_quantity: e.target.value})}/>
+                    </div>
+                    
+                    <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">URL da Imagem</label>
-                        <div className="flex gap-4">
-                            <input className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none" value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>
-                            {prodForm.imageUrl && <img src={prodForm.imageUrl} className="w-12 h-12 object-contain bg-slate-50 border rounded-lg" alt="preview"/>}
-                        </div>
+                        <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>
                     </div>
+
                     <div className="col-span-1 md:col-span-2">
                         <label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label>
-                        <textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 outline-none resize-none" value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/>
+                        <textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none" value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/>
                     </div>
                  </div>
-                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold text-lg shadow-lg shadow-yellow-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">
-                    <Save size={20}/> Salvar Produto
+                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+                    <Save size={20}/> Salvar e Fechar
                  </button>
                </form>
              </div>
@@ -798,15 +773,13 @@ export default function App() {
         {/* MODAL EXCLUSÃO */}
         {deleteModal.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-enter">
-            <div className="bg-white rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl border border-slate-200 transform scale-100">
-              <div className="bg-red-50 p-4 rounded-full w-16 h-16 mx-auto mb-6 flex items-center justify-center">
-                <AlertTriangle className="text-red-600" size={32} />
-              </div>
+            <div className="bg-white rounded-2xl p-8 w-full max-w-sm text-center shadow-2xl border border-slate-200">
+              <AlertTriangle className="text-red-600 mx-auto mb-4" size={32} />
               <h3 className="text-xl font-bold mb-2 text-slate-800">Tem certeza?</h3>
-              <p className="text-slate-500 text-sm mb-8">Esta ação não poderá ser desfeita. O item será removido permanentemente.</p>
+              <p className="text-slate-500 text-sm mb-8">Esta ação não poderá ser desfeita.</p>
               <div className="flex gap-3">
-                <button onClick={() => setDeleteModal({open:false,type:null,id:null})} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                <button onClick={confirmDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg shadow-red-200 transition-colors">Confirmar</button>
+                <button onClick={() => setDeleteModal({open:false,type:null,id:null})} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200">Cancelar</button>
+                <button onClick={confirmDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg">Confirmar</button>
               </div>
             </div>
           </div>
