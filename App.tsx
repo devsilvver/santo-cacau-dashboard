@@ -503,23 +503,49 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/admin/orders`);
       if (res.ok) {
         const data = await res.json();
-        // MOCK DE DADOS PARA DEMONSTRAÇÃO DOS NOVOS CAMPOS
-        // EM PROD, VOCÊ DEVE GARANTIR QUE SUA API RETORNE ESSES DADOS!
-        const mockedOrders = data.map((order: any) => ({
-          ...order,
-          shipping_method:
-            order.shipping_method ||
-            (order.shipping_address.includes("Rua Principal")
-              ? "Retirada na Loja"
-              : "Correios Sedex"),
-          payment_method: order.mp_payment_id
-            ? "Cartão de Crédito/PIX (MP)"
-            : "Boleto Pendente",
-          shipping_address: order.shipping_address || "Endereço indisponível",
-        }));
-        setOrders(mockedOrders);
+        
+        const processedOrders = data.map((order: any) => {
+            let itemsArray = [];
+            // 1. CORREÇÃO: Transforma a string JSON de itens em um array de objetos
+            if (typeof order.items === 'string' && order.items.length > 0) {
+                try {
+                    itemsArray = JSON.parse(order.items);
+                } catch (e) {
+                    console.error("Erro ao fazer parse dos itens:", e);
+                }
+            } else if (Array.isArray(order.items)) {
+                itemsArray = order.items;
+            }
+
+            // 2. MOCK/CORREÇÃO DE DADOS ANTIGOS (para exibir corretamente dados pré-correção)
+            // Se o shipping_method for nulo/vazio, tentamos usar o valor que estava no campo address (o bug antigo)
+            const finalShippingMethod = order.shipping_method || (
+                String(order.shipping_address).includes("SEDEX") || String(order.shipping_address).includes("Retirada") 
+                ? order.shipping_address 
+                : "Método Não Registrado"
+            );
+
+            // 3. Corrigir o address para pedidos antigos que tinham o método no lugar do endereço
+            const finalShippingAddress = (
+                String(order.shipping_address).includes("SEDEX") || 
+                String(order.shipping_address).includes("Retirada")
+            ) ? "Endereço Pendente/Não Registrado" : order.shipping_address || "Endereço Não Registrado";
+
+            // 4. RETORNO FINAL
+            return {
+                ...order,
+                items: itemsArray, // Array de itens corrigido
+                shipping_method: finalShippingMethod,
+                payment_method: order.payment_method || (order.mp_payment_id ? "Cartão de Crédito/PIX (MP)" : "Boleto Pendente"),
+                shipping_address: finalShippingAddress,
+            };
+        });
+
+        setOrders(processedOrders);
       }
-    } catch {}
+    } catch (e) {
+        console.error("Erro ao carregar pedidos:", e);
+    }
   };
   const loadIps = async () => {
     try {
