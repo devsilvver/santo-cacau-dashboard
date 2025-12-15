@@ -24,7 +24,10 @@ import {
   DollarSign,
   Terminal,
   Minus,
-  Plus
+  Plus,
+  Palette,      // Novo
+  CheckSquare,  // Novo
+  Square        // Novo
 } from 'lucide-react';
 
 // URL da API
@@ -66,19 +69,34 @@ interface LogMessage {
   message: string;
 }
 
+// NOVA INTERFACE PARA CONFIGURAÇÃO DO SITE
+interface SiteConfig {
+    banner_tag: string;
+    banner_title: string;
+    section_tag: string;
+    section_title: string;
+    highlight_ids: string[];
+}
+
 export default function App() {
   // --- ESTADOS DE CONTROLE DE ACESSO ---
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   // --- ESTADOS DE NAVEGAÇÃO E DADOS ---
-  const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY' | 'LOGS'>('PRODUCTS');
+  // Adicionado 'SITE_CONFIG'
+  const [view, setView] = useState<'PRODUCTS' | 'PROD_FORM' | 'SALES' | 'SECURITY' | 'LOGS' | 'SITE_CONFIG'>('PRODUCTS');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ips, setIps] = useState<AllowedIp[]>([]);
   const [logs, setLogs] = useState<LogMessage[]>([]);
+  
+  // NOVO ESTADO: Configurações do Site
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>({
+      banner_tag: '', banner_title: '', section_tag: '', section_title: '', highlight_ids: []
+  });
   
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -121,7 +139,7 @@ export default function App() {
     verifyAccess();
   }, []);
 
-  // --- POLLING (VENDAS) ---
+  // --- POLLING (VENDAS E ESTOQUE) ---
   useEffect(() => {
     let interval: any;
     if (isAuthorized) {
@@ -176,31 +194,19 @@ export default function App() {
   const loadOrders = async () => {
     try {
       const res = await fetch(`${API_URL}/api/admin/orders`);
-      
-      if (res.status === 403) { 
-        setIsAuthorized(false); 
-        return; 
-      }
+      if (res.status === 403) { setIsAuthorized(false); return; }
       
       const data = await res.json();
-      
       const treatedData = Array.isArray(data) ? data.map((o: any) => {
           const orderDate = new Date(o.created_at).getTime();
           const now = new Date().getTime();
           const hoursDiff = (now - orderDate) / (1000 * 3600);
           
           let statusFinal = o.status;
-          if (o.status === 'pending' && hoursDiff > 24) {
-              statusFinal = 'cancelled';
-          }
+          if (o.status === 'pending' && hoursDiff > 24) statusFinal = 'cancelled';
 
           let parsedItems = [];
-          try {
-            parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items;
-          } catch (err) {
-            parsedItems = [];
-          }
-
+          try { parsedItems = typeof o.items === 'string' ? JSON.parse(o.items) : o.items; } catch (err) { parsedItems = []; }
           if (!Array.isArray(parsedItems)) parsedItems = [];
 
           return { ...o, status: statusFinal, items: parsedItems };
@@ -221,20 +227,36 @@ export default function App() {
     setLoading(false);
   };
 
+  // NOVA FUNÇÃO: Carregar Configurações do Site
+  const loadSiteConfig = async () => {
+      try {
+          const res = await fetch(`${API_URL}/api/site-config`);
+          if (res.ok) {
+              const data = await res.json();
+              if (typeof data.highlight_ids === 'string') data.highlight_ids = JSON.parse(data.highlight_ids);
+              setSiteConfig(data);
+          }
+      } catch (e) { console.error("Erro config site", e); }
+  };
+
+  // Hook unificado para carregar dados conforme a tela
   useEffect(() => {
     if (!isAuthorized) return;
     if (view === 'PRODUCTS') loadProducts();
     if (view === 'SECURITY') loadIps();
+    // Se for a tela de configuração, carrega produtos (para a lista) e a config
+    if (view === 'SITE_CONFIG') {
+        loadProducts();
+        loadSiteConfig();
+    }
   }, [view, isAuthorized]);
 
   // --- HANDLERS (AÇÕES) ---
 
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     const priceString = String(prodForm.price).replace(',', '.');
     const abvString = String(prodForm.abv).replace(',', '.');
-    
     const priceFinal = parseFloat(priceString);
     const abvFinal = parseFloat(abvString);
 
@@ -266,19 +288,13 @@ export default function App() {
           await loadProducts(); 
           if (!editingId) handleCreateProd();
           setView('PRODUCTS');
-      }
-      else { 
+      } else { 
           try {
               const errorData = await res.json();
               alert('Erro do Servidor: ' + (errorData.error || errorData.message));
-          } catch (jsonError) {
-              alert('Erro ao salvar produto.');
-          }
+          } catch (jsonError) { alert('Erro ao salvar produto.'); }
       }
-    } catch (e) { 
-        console.error(e);
-        alert('Erro de conexão.'); 
-    }
+    } catch (e) { alert('Erro de conexão.'); }
   };
 
   const persistStock = async (id: string, newQuantity: number) => {
@@ -288,11 +304,10 @@ export default function App() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ quantity: newQuantity })
         });
-
         if (!res.ok) throw new Error();
     } catch (e) {
         console.error("Erro ao salvar estoque", e);
-        loadProducts(); // Reverte em caso de erro
+        loadProducts(); 
     }
   };
 
@@ -313,8 +328,7 @@ export default function App() {
     setProdForm({
       name: p.name, description: p.description, price: String(p.price),
       packaging: p.packaging, type: p.type, imageUrl: p.image_url,
-      abv: String(p.abv), volume: p.volume,
-      stock_quantity: String(p.stock_quantity)
+      abv: String(p.abv), volume: p.volume, stock_quantity: String(p.stock_quantity)
     });
     setView('PROD_FORM');
     setIsSidebarOpen(false);
@@ -329,6 +343,29 @@ export default function App() {
     });
     setView('PROD_FORM');
   }
+
+  // NOVO HANDLER: Salvar Configurações do Site
+  const handleSaveSiteConfig = async (e: React.FormEvent) => {
+      e.preventDefault();
+      try {
+          const res = await fetch(`${API_URL}/api/site-config`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(siteConfig)
+          });
+          if (res.ok) alert('Site atualizado com sucesso!');
+          else alert('Erro ao atualizar site');
+      } catch (e) { alert('Erro de conexão'); }
+  };
+
+  // NOVO HANDLER: Marcar/Desmarcar produto destaque
+  const toggleHighlight = (productId: string) => {
+      setSiteConfig(prev => {
+          const ids = prev.highlight_ids || [];
+          if (ids.includes(productId)) return { ...prev, highlight_ids: ids.filter(id => id !== productId) };
+          return { ...prev, highlight_ids: [...ids, productId] };
+      });
+  };
 
   const handleSaveIp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -380,13 +417,7 @@ export default function App() {
   };
   
   const navClick = (v: any) => { setView(v); setIsSidebarOpen(false); };
-
-  // Helper para bloquear input numérico
-  const preventNonNumeric = (e: React.KeyboardEvent) => {
-    if (["e", "E", "+", "-"].includes(e.key)) {
-        e.preventDefault();
-    }
-  };
+  const preventNonNumeric = (e: React.KeyboardEvent) => { if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault(); };
 
   if (isCheckingAuth) {
     return (
@@ -443,6 +474,7 @@ export default function App() {
           {[
             { id: 'PRODUCTS', icon: LayoutDashboard, label: 'Produtos' },
             { id: 'SALES', icon: ShoppingBag, label: 'Vendas' },
+            { id: 'SITE_CONFIG', icon: Palette, label: 'Personalizar Site' }, // NOVA OPÇÃO
             { id: 'SECURITY', icon: Shield, label: 'Segurança' },
             { id: 'LOGS', icon: Terminal, label: 'Logs' }
           ].map(item => (
@@ -510,31 +542,9 @@ export default function App() {
                         </td>
                         <td className="px-6 py-3">
                             <div className="flex items-center gap-1 bg-slate-100 w-fit px-2 py-1 rounded-lg border border-slate-200 shadow-sm">
-                                <button 
-                                    onClick={() => updateStock(p.id, p.stock_quantity, -1)} 
-                                    className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-red-500 transition-colors active:scale-95"
-                                >
-                                    <Minus size={14}/>
-                                </button>
-                                
-                                <input 
-                                    type="number"
-                                    className={`w-12 text-center bg-transparent outline-none font-mono font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`}
-                                    value={p.stock_quantity}
-                                    onChange={(e) => handleManualStockChange(p.id, e.target.value)}
-                                    onBlur={(e) => persistStock(p.id, parseInt(e.target.value) || 0)}
-                                    onKeyDown={(e) => {
-                                        preventNonNumeric(e);
-                                        if(e.key === 'Enter') e.currentTarget.blur();
-                                    }}
-                                />
-
-                                <button 
-                                    onClick={() => updateStock(p.id, p.stock_quantity, 1)} 
-                                    className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-green-600 transition-colors active:scale-95"
-                                >
-                                    <Plus size={14}/>
-                                </button>
+                                <button onClick={() => updateStock(p.id, p.stock_quantity, -1)} className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-red-500 transition-colors active:scale-95"><Minus size={14}/></button>
+                                <input type="number" className={`w-12 text-center bg-transparent outline-none font-mono font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : 'text-slate-700'}`} value={p.stock_quantity} onChange={(e) => handleManualStockChange(p.id, e.target.value)} onBlur={(e) => persistStock(p.id, parseInt(e.target.value) || 0)} onKeyDown={(e) => { preventNonNumeric(e); if(e.key === 'Enter') e.currentTarget.blur(); }} />
+                                <button onClick={() => updateStock(p.id, p.stock_quantity, 1)} className="p-1 hover:bg-white rounded-md text-slate-400 hover:text-green-600 transition-colors active:scale-95"><Plus size={14}/></button>
                             </div>
                         </td>
                         <td className="px-6 py-3 font-bold text-green-600">{formatMoney(p.price)}</td>
@@ -553,6 +563,66 @@ export default function App() {
           </div>
         )}
 
+        {/* --- NOVA ABA: PERSONALIZAR SITE --- */}
+        {view === 'SITE_CONFIG' && (
+            <div className="animate-enter max-w-5xl mx-auto">
+                <div className="flex justify-between items-center mb-8">
+                    <div><h2 className="text-3xl font-bold text-slate-800">Personalizar Site</h2><p className="text-slate-500">Altere textos e produtos em destaque.</p></div>
+                    <button onClick={handleSaveSiteConfig} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-all"><Save size={20}/> Publicar Alterações</button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Banner Principal */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="flex items-center gap-2 mb-4 text-slate-800 font-bold text-lg"><LayoutDashboard className="text-yellow-500"/> Banner Promocional</div>
+                        <div className="space-y-4">
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Etiqueta (ex: Oferta Exclusiva)</label><input className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" value={siteConfig.banner_tag} onChange={e => setSiteConfig({...siteConfig, banner_tag: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título Principal</label><input className="w-full p-3 border rounded-xl font-serif text-lg outline-none focus:border-blue-500" value={siteConfig.banner_title} onChange={e => setSiteConfig({...siteConfig, banner_title: e.target.value})} /></div>
+                        </div>
+                    </div>
+
+                    {/* Título Seção Especial */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="flex items-center gap-2 mb-4 text-slate-800 font-bold text-lg"><Package className="text-green-600"/> Seção de Destaque</div>
+                        <div className="space-y-4">
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Etiqueta (ex: Edição Especial)</label><input className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" value={siteConfig.section_tag} onChange={e => setSiteConfig({...siteConfig, section_tag: e.target.value})} /></div>
+                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título da Seção</label><input className="w-full p-3 border rounded-xl font-serif text-lg outline-none focus:border-blue-500" value={siteConfig.section_title} onChange={e => setSiteConfig({...siteConfig, section_title: e.target.value})} /></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Seleção de Produtos */}
+                <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-lg text-slate-800 mb-4">Selecionar Produtos em Destaque</h3>
+                    <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded-xl custom-scrollbar">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 text-xs uppercase font-bold text-slate-500 sticky top-0"><tr><th className="p-4">Selecionar</th><th className="p-4">Produto</th><th className="p-4">Preço</th></tr></thead>
+                            <tbody className="divide-y">
+                                {products.map(p => {
+                                    const isSelected = siteConfig.highlight_ids?.includes(p.id);
+                                    return (
+                                        <tr key={p.id} className={`hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50/50' : ''}`} onClick={() => toggleHighlight(p.id)}>
+                                            <td className="p-4">
+                                                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 text-transparent'}`}>
+                                                    <CheckSquare size={16} />
+                                                </div>
+                                            </td>
+                                            <td className="p-4 flex items-center gap-3">
+                                                <img src={p.image_url} className="w-10 h-10 object-contain rounded bg-white border" />
+                                                <span className={isSelected ? 'font-bold text-blue-700' : 'text-slate-700'}>{p.name}</span>
+                                            </td>
+                                            <td className="p-4 text-slate-600">{formatMoney(p.price)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 text-right">Mostrando {siteConfig.highlight_ids?.length || 0} produtos na seção de destaque.</p>
+                </div>
+            </div>
+        )}
+
         {/* VIEW: VENDAS */}
         {view === 'SALES' && (
           <div className="animate-enter pb-10">
@@ -565,74 +635,29 @@ export default function App() {
                 <span className="w-2 h-2 bg-emerald-500 rounded-full"></span> ATUALIZANDO AO VIVO
               </div>
             </div>
-            
             <div className="grid gap-6">
               {orders.map(o => (
                 <div key={o.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300">
                   <div className="bg-slate-50/80 p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4">
                     <div className="flex items-center gap-4">
-                      <div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">
-                        #{o.id}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">{formatDate(o.created_at)}</p>
-                      </div>
+                      <div className="bg-white p-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-lg shadow-sm">#{o.id}</div>
+                      <div><p className="text-sm font-medium text-slate-700">{formatDate(o.created_at)}</p></div>
                     </div>
-                    <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(o.status)}`}>
-                      {translateStatus(o.status)}
-                    </div>
+                    <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${getStatusStyle(o.status)}`}>{translateStatus(o.status)}</div>
                   </div>
-
                   <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="space-y-6">
                       <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                          <User size={14}/> Cliente
-                        </h4>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
-                          <p className="font-bold text-slate-800 text-lg">{o.full_name}</p>
-                          <div className="space-y-1">
-                            <p className="text-slate-500 text-sm flex items-center gap-2"><Mail size={14}/> {o.email}</p>
-                            <p className="text-slate-500 text-sm flex items-center gap-2"><Phone size={14}/> {o.phone}</p>
-                          </div>
-                        </div>
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><User size={14}/> Cliente</h4>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2"><p className="font-bold text-slate-800 text-lg">{o.full_name}</p><div className="space-y-1"><p className="text-slate-500 text-sm flex items-center gap-2"><Mail size={14}/> {o.email}</p><p className="text-slate-500 text-sm flex items-center gap-2"><Phone size={14}/> {o.phone}</p></div></div>
                       </div>
                     </div>
-
                     <div className="lg:col-span-2 flex flex-col h-full">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-                        <Package size={14}/> Itens
-                      </h4>
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-3"><Package size={14}/> Itens</h4>
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex-1 mb-4 shadow-sm">
-                        {Array.isArray(o.items) && o.items.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm">
-                              <tbody className="divide-y divide-slate-100">
-                                {o.items.map((item, idx) => (
-                                  <tr key={idx} className="hover:bg-slate-50/50">
-                                    <td className="p-3 pl-4">
-                                        <span className="font-medium text-slate-700">{item.name}</span>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span>
-                                    </td>
-                                    <td className="p-3 text-right pr-4 font-medium text-slate-600">
-                                      {formatMoney(Number(item.unit_price) * Number(item.quantity))}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (<div className="p-8 text-center text-slate-400">Detalhes indisponíveis.</div>)}
+                        {Array.isArray(o.items) && o.items.length > 0 ? (<div className="overflow-x-auto"><table className="w-full text-left text-sm"><tbody className="divide-y divide-slate-100">{o.items.map((item, idx) => (<tr key={idx} className="hover:bg-slate-50/50"><td className="p-3 pl-4"><span className="font-medium text-slate-700">{item.name}</span></td><td className="p-3 text-center"><span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded text-xs">x{item.quantity}</span></td><td className="p-3 text-right pr-4 font-medium text-slate-600">{formatMoney(Number(item.unit_price) * Number(item.quantity))}</td></tr>))}</tbody></table></div>) : (<div className="p-8 text-center text-slate-400">Detalhes indisponíveis.</div>)}
                       </div>
-                      <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center">
-                        <span className="text-green-800 text-sm font-bold uppercase tracking-wide">Total</span>
-                        <div className="flex items-center gap-1 text-2xl font-extrabold text-green-600">
-                          <DollarSign size={20} className="mt-1"/>
-                          {formatMoney(o.total_amount)}
-                        </div>
-                      </div>
+                      <div className="mt-auto bg-green-50 p-4 rounded-xl border border-green-100 flex justify-between items-center"><span className="text-green-800 text-sm font-bold uppercase tracking-wide">Total</span><div className="flex items-center gap-1 text-2xl font-extrabold text-green-600"><DollarSign size={20} className="mt-1"/>{formatMoney(o.total_amount)}</div></div>
                     </div>
                   </div>
                 </div>
@@ -646,44 +671,12 @@ export default function App() {
         {view === 'LOGS' && (
           <div className="animate-enter max-w-5xl mx-auto">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-              <div>
-                <h2 className="text-3xl font-bold text-slate-800">Logs do Servidor</h2>
-                <p className="text-slate-500 mt-1">Monitoramento em tempo real.</p>
-              </div>
-              <div className="flex gap-2">
-                 <button onClick={() => setLogs([])} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors">Limpar</button>
-                 <div className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm animate-pulse">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span> CONECTADO
-                </div>
-              </div>
+              <div><h2 className="text-3xl font-bold text-slate-800">Logs do Servidor</h2><p className="text-slate-500 mt-1">Monitoramento em tempo real.</p></div>
+              <div className="flex gap-2"><button onClick={() => setLogs([])} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors">Limpar</button><div className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm animate-pulse"><span className="w-2 h-2 bg-blue-500 rounded-full"></span> CONECTADO</div></div>
             </div>
-
             <div className="bg-slate-900 rounded-2xl shadow-xl border border-slate-800 overflow-hidden font-mono text-sm">
-                <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-                    <div className="flex gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    </div>
-                    <span className="text-slate-500 text-xs">console output</span>
-                </div>
-                
-                <div className="p-4 max-h-[600px] overflow-y-auto space-y-2">
-                    {logs.length === 0 ? (
-                        <div className="text-slate-600 text-center py-12 italic">Aguardando eventos...</div>
-                    ) : (
-                        logs.map((log, index) => (
-                            <div key={index} className="flex gap-3 text-slate-300 hover:bg-slate-800/50 p-2 rounded transition-colors border-l-2 border-transparent hover:border-yellow-500">
-                                <span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                                <span className={`font-bold shrink-0 ${log.type === 'ACCESS_DENIED' || log.type === 'BLOCK' ? 'text-red-500' : 'text-blue-400'}`}>
-                                    {log.type}
-                                </span>
-                                <span className="text-slate-400 shrink-0">{log.ip}</span>
-                                <span className="text-white break-all">{log.message}</span>
-                            </div>
-                        ))
-                    )}
-                </div>
+                <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex items-center justify-between"><div className="flex gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><div className="w-3 h-3 rounded-full bg-yellow-500"></div><div className="w-3 h-3 rounded-full bg-green-500"></div></div><span className="text-slate-500 text-xs">console output</span></div>
+                <div className="p-4 max-h-[600px] overflow-y-auto space-y-2">{logs.length === 0 ? (<div className="text-slate-600 text-center py-12 italic">Aguardando eventos...</div>) : (logs.map((log, index) => (<div key={index} className="flex gap-3 text-slate-300 hover:bg-slate-800/50 p-2 rounded transition-colors border-l-2 border-transparent hover:border-yellow-500"><span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span><span className={`font-bold shrink-0 ${log.type === 'ACCESS_DENIED' || log.type === 'BLOCK' ? 'text-red-500' : 'text-blue-400'}`}>{log.type}</span><span className="text-slate-400 shrink-0">{log.ip}</span><span className="text-white break-all">{log.message}</span></div>)))}</div>
             </div>
           </div>
         )}
@@ -694,25 +687,10 @@ export default function App() {
             <h2 className="text-3xl font-bold text-slate-800 mb-6">Segurança</h2>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} className="text-green-600"/> Liberar Novo Acesso</h3>
-              <form onSubmit={handleSaveIp} className="flex flex-col md:flex-row gap-4 items-end">
-                <div className="w-full md:flex-1"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">IP</label><input className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none" value={ipForm.ip} onChange={e => setIpForm({...ipForm, ip: e.target.value})} /></div>
-                <div className="w-full md:flex-[2]"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label><input className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none" value={ipForm.desc} onChange={e => setIpForm({...ipForm, desc: e.target.value})} /></div>
-                <button type="submit" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-xl font-bold">Salvar</button>
-              </form>
+              <form onSubmit={handleSaveIp} className="flex flex-col md:flex-row gap-4 items-end"><div className="w-full md:flex-1"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">IP</label><input className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none" value={ipForm.ip} onChange={e => setIpForm({...ipForm, ip: e.target.value})} /></div><div className="w-full md:flex-[2]"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição</label><input className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none" value={ipForm.desc} onChange={e => setIpForm({...ipForm, desc: e.target.value})} /></div><button type="submit" className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-xl font-bold">Salvar</button></form>
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold"><tr><th className="px-6 py-4">IP</th><th className="px-6 py-4">Descrição</th><th className="px-6 py-4 text-right">Ação</th></tr></thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {ips.map(ip => (
-                      <tr key={ip.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 font-mono text-slate-600">{ip.ip_address}</td>
-                        <td className="px-6 py-4">{ip.description}</td>
-                        <td className="px-6 py-4 text-right"><button onClick={() => setDeleteModal({open:true, type:'IP', id: ip.id})} className="text-red-500"><Trash2 size={18}/></button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <table className="w-full text-left"><thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold"><tr><th className="px-6 py-4">IP</th><th className="px-6 py-4">Descrição</th><th className="px-6 py-4 text-right">Ação</th></tr></thead><tbody className="divide-y divide-slate-100">{ips.map(ip => (<tr key={ip.id} className="hover:bg-slate-50"><td className="px-6 py-4 font-mono text-slate-600">{ip.ip_address}</td><td className="px-6 py-4">{ip.description}</td><td className="px-6 py-4 text-right"><button onClick={() => setDeleteModal({open:true, type:'IP', id: ip.id})} className="text-red-500"><Trash2 size={18}/></button></td></tr>))}</tbody></table>
             </div>
           </div>
         )}
@@ -723,93 +701,24 @@ export default function App() {
              <button onClick={() => setView('PRODUCTS')} className="mb-4 text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium"><X size={20}/> Cancelar e voltar</button>
              <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
                <div className="bg-slate-900 p-6 text-white flex justify-between items-center relative overflow-hidden">
-                  <div className="relative z-10">
-                    <h2 className="font-bold text-xl">{editingId ? 'Editar Produto' : 'Cadastrar Produto'}</h2>
-                    <p className="text-slate-400 text-sm mt-1">Preencha as informações abaixo.</p>
-                  </div>
+                  <div className="relative z-10"><h2 className="font-bold text-xl">{editingId ? 'Editar Produto' : 'Cadastrar Produto'}</h2><p className="text-slate-400 text-sm mt-1">Preencha as informações abaixo.</p></div>
                   <img src="https://i.imgur.com/Q3oTWj1.png" className="h-12 opacity-20 absolute right-4 rotate-12" alt="logo"/>
                </div>
                <form onSubmit={handleSaveProd} className="p-8 space-y-6">
-                 {/* GRID PRINCIPAL */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Linha 1: Nome (Largura Total) */}
-                    <div className="col-span-1 md:col-span-2">
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Produto</label>
-                        <input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 outline-none transition-all" 
-                            value={prodForm.name} onChange={e=>setProdForm({...prodForm, name: e.target.value})}/>
-                    </div>
-
-                    {/* Linha 2: Embalagem e Tipo */}
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Embalagem</label>
-                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.packaging} onChange={e=>{
-                            const pkg = e.target.value;
-                            setProdForm({...prodForm, packaging: pkg, volume: pkg==='Garrafa PET'?'1L':'700ml'});
-                        }}>
-                            <option>Garrafa PET</option><option>Garrafa de Vidro</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Tipo</label>
-                        <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.type} onChange={e=>setProdForm({...prodForm, type: e.target.value})}>
-                            <option>Curtida</option><option>Doce</option>
-                        </select>
-                    </div>
-
-                    {/* Linha 3: Campos Pequenos Agrupados (Preço, Vol, ABV, Estoque) */}
+                    <div className="col-span-1 md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-1">Nome do Produto</label><input required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 outline-none transition-all" value={prodForm.name} onChange={e=>setProdForm({...prodForm, name: e.target.value})}/></div>
+                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Embalagem</label><select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.packaging} onChange={e=>{const pkg = e.target.value; setProdForm({...prodForm, packaging: pkg, volume: pkg==='Garrafa PET'?'1L':'700ml'});}}><option>Garrafa PET</option><option>Garrafa de Vidro</option></select></div>
+                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Tipo</label><select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white" value={prodForm.type} onChange={e=>setProdForm({...prodForm, type: e.target.value})}><option>Curtida</option><option>Doce</option></select></div>
                     <div className="col-span-1 md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Preço (R$)</label>
-                            <input required type="number" step="0.01" onKeyDown={preventNonNumeric} 
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" 
-                                value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Volume</label>
-                            <input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" 
-                                value={prodForm.volume} onChange={e=>setProdForm({...prodForm, volume: e.target.value})}/>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Teor (%)</label>
-                            <input type="number" onKeyDown={preventNonNumeric}
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" 
-                                value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Estoque</label>
-                            <input type="number" onKeyDown={preventNonNumeric}
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500 bg-slate-50" 
-                                value={prodForm.stock_quantity} onChange={e=>setProdForm({...prodForm, stock_quantity: e.target.value})}/>
-                        </div>
+                        <div><label className="block text-sm font-bold text-slate-700 mb-1">Preço (R$)</label><input required type="number" step="0.01" onKeyDown={preventNonNumeric} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" value={prodForm.price} onChange={e=>setProdForm({...prodForm, price: e.target.value})}/></div>
+                        <div><label className="block text-sm font-bold text-slate-700 mb-1">Volume</label><input className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none" value={prodForm.volume} onChange={e=>setProdForm({...prodForm, volume: e.target.value})}/></div>
+                        <div><label className="block text-sm font-bold text-slate-700 mb-1">Teor (%)</label><input type="number" onKeyDown={preventNonNumeric} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" value={prodForm.abv} onChange={e=>setProdForm({...prodForm, abv: e.target.value})}/></div>
+                        <div><label className="block text-sm font-bold text-slate-700 mb-1">Estoque</label><input type="number" onKeyDown={preventNonNumeric} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500 bg-slate-50" value={prodForm.stock_quantity} onChange={e=>setProdForm({...prodForm, stock_quantity: e.target.value})}/></div>
                     </div>
-                    
-                    {/* Linha 4: Imagem e Preview */}
-                    <div className="col-span-1 md:col-span-2">
-                        <label className="block text-sm font-bold text-slate-700 mb-1">URL da Imagem</label>
-                        <div className="flex flex-col md:flex-row gap-4 items-start">
-                            <input className="flex-1 w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" 
-                                value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>
-                            
-                            {/* PREVIEW DA IMAGEM MAIOR */}
-                            {prodForm.imageUrl && (
-                                <div className="w-40 h-40 shrink-0 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 shadow-sm overflow-hidden">
-                                    <img src={prodForm.imageUrl} className="w-full h-full object-contain" alt="Preview" 
-                                        onError={(e) => e.currentTarget.style.display = 'none'} />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Linha 5: Descrição */}
-                    <div className="col-span-1 md:col-span-2">
-                        <label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label>
-                        <textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none focus:border-yellow-500" 
-                            value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/>
-                    </div>
+                    <div className="col-span-1 md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-1">URL da Imagem</label><div className="flex flex-col md:flex-row gap-4 items-start"><input className="flex-1 w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500" value={prodForm.imageUrl} onChange={e=>setProdForm({...prodForm, imageUrl: e.target.value})}/>{prodForm.imageUrl && (<div className="w-40 h-40 shrink-0 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 shadow-sm overflow-hidden"><img src={prodForm.imageUrl} className="w-full h-full object-contain" alt="Preview" onError={(e) => e.currentTarget.style.display = 'none'} /></div>)}</div></div>
+                    <div className="col-span-1 md:col-span-2"><label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label><textarea rows={4} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none focus:border-yellow-500" value={prodForm.description} onChange={e=>setProdForm({...prodForm, description: e.target.value})}/></div>
                  </div>
-                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
-                    <Save size={20}/> Salvar e Fechar
-                 </button>
+                 <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"><Save size={20}/> Salvar e Fechar</button>
                </form>
              </div>
           </div>
