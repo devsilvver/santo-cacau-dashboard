@@ -2242,6 +2242,10 @@ export default function App() {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {view === "SECURITY" && (
             <div className="max-w-4xl mx-auto animate-enter">
