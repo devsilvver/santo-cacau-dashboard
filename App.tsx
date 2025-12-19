@@ -462,6 +462,18 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthorized) return;
+
+    // 1. Carrega histórico do banco (NOVO)
+    if (view === "LOGS") {
+      fetch(`${API_URL}/api/admin/logs-history`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) setLogs(data);
+        })
+        .catch((err) => console.error("Erro logs:", err));
+    }
+
+    // 2. Conecta ao stream em tempo real (Mantido)
     const eventSource = new EventSource(`${API_URL}/api/logs/stream`);
     eventSource.onmessage = (event) => {
       try {
@@ -470,7 +482,7 @@ export default function App() {
     };
     eventSource.onerror = () => eventSource.close();
     return () => eventSource.close();
-  }, [isAuthorized]);
+  }, [isAuthorized, view]);
 
   const loadProducts = async () => {
     setLoading(true);
