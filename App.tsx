@@ -610,7 +610,8 @@ export default function App() {
         height: String(model.height),
         width: String(model.width),
         length: String(model.length),
-        weight: String(model.weight),
+        // CORREÇÃO: Força 3 casas decimais para casar com a máscara (1.000)
+        weight: parseFloat(String(model.weight)).toFixed(3),
       }));
     }
   };
@@ -781,12 +782,20 @@ export default function App() {
 
     const payload = {
       ...prodForm,
+      // Garante que o preço vá como número (troca vírgula por ponto)
       price: parseFloat(String(prodForm.price).replace(",", ".")),
+
+      // Garante que o teor alcoólico vá como número
       abv:
         prodCategory === "CACHACA"
           ? parseFloat(String(prodForm.abv).replace(",", "."))
           : 0,
+
       stock_quantity: Number(prodForm.stock_quantity),
+
+      // CORREÇÃO: Converte o peso formatado (ex: "1.045") de volta para número puro
+      weight: parseFloat(String(prodForm.weight).replace(",", ".")) || 0,
+
       packaging:
         prodCategory === "CACHACA" ? prodForm.packaging : "Produto Diverso",
       type: prodCategory === "CACHACA" ? prodForm.type : "Geral",
@@ -890,7 +899,7 @@ export default function App() {
       height: String(p.height || 20),
       width: String(p.width || 10),
       length: String(p.length || 10),
-      weight: String(p.weight || 1),
+      weight: parseFloat(String(p.weight || 0)).toFixed(3),
     });
 
     setView("PROD_FORM");
