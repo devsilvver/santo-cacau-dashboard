@@ -362,6 +362,8 @@ export default function App() {
   const [logs, setLogs] = useState<LogMessage[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  const [editingModelId, setEditingModelId] = useState<number | null>(null); // NOVO
+
   // ESTADO DE CONFIGURAÇÃO DO SITE (CMS)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
     banner_tag: "",
@@ -510,30 +512,66 @@ export default function App() {
   const loadModels = async () => {
     try {
       const res = await fetch(`${API_URL}/api/product-models`);
-      if (res.ok) setModels(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setModels(data);
+        return data;
+      }
     } catch (e) {
       console.error(e);
     }
+    return [];
+  };
+
+  // --- FUNÇÕES DE MODELO (ATUALIZADAS) ---
+  const handleEditModel = (m: ProductModel) => {
+    setEditingModelId(m.id);
+    setModelForm({
+      name: m.name,
+      height: String(m.height),
+      width: String(m.width),
+      length: String(m.length),
+      weight: String(m.weight),
+    });
+    // Rola a tela para o formulário
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSaveModel = async (e: React.FormEvent) => {
     e.preventDefault();
+    const method = editingModelId ? "PUT" : "POST";
+    const url = editingModelId
+      ? `${API_URL}/api/product-models/${editingModelId}`
+      : `${API_URL}/api/product-models`;
+
     try {
-      await fetch(`${API_URL}/api/product-models`, {
-        method: "POST",
+      await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(modelForm),
       });
-      loadModels();
+
+      await loadModels(); // Recarrega modelos
+      await loadProducts(); // <--- IMPORTANTE: Recarrega produtos para ver a mudança na hora!
+
       setModelForm({ name: "", height: "", width: "", length: "", weight: "" });
-      showToast("Modelo salvo!", "success");
+      setEditingModelId(null);
+      showToast(
+        editingModelId ? "Modelo e produtos atualizados!" : "Modelo criado!",
+        "success"
+      );
     } catch {
       showToast("Erro ao salvar", "error");
     }
   };
 
   const handleDeleteModel = async (id: number) => {
-    if (!confirm("Deletar modelo?")) return;
+    if (
+      !confirm(
+        "Deletar modelo? Produtos que usam este modelo NÃO serão alterados."
+      )
+    )
+      return;
     try {
       await fetch(`${API_URL}/api/product-models/${id}`, { method: "DELETE" });
       loadModels();
@@ -791,9 +829,35 @@ export default function App() {
   };
 
   const handleEditProd = async (p: Product) => {
-    await loadModels();
+    // 1. Carrega os modelos e espera a resposta
+    const loadedModels = await loadModels();
+
     setEditingId(p.id);
-    setProdCategory(p.abv > 0 ? "CACHACA" : "GENERAL");
+
+    // 2. Define a categoria (Cachaça se tiver álcool > 0)
+    const isCachaca = Number(p.abv) > 0;
+    setProdCategory(isCachaca ? "CACHACA" : "GENERAL");
+
+    // 3. Tenta encontrar qual Modelo corresponde a este produto
+    // Tenta primeiro pelo NOME exato, se falhar, tenta pelas MEDIDAS exatas
+    const foundModel =
+      loadedModels.find((m) => m.name === p.packaging) ||
+      loadedModels.find(
+        (m) =>
+          Number(m.height) === Number(p.height) &&
+          Number(m.width) === Number(p.width) &&
+          Number(m.length) === Number(p.length) &&
+          Number(m.weight) === Number(p.weight)
+      );
+
+    // 4. Se achou, seleciona no dropdown visualmente
+    if (foundModel) {
+      setSelectedModelId(String(foundModel.id));
+    } else {
+      setSelectedModelId("");
+    }
+
+    // 5. Preenche o formulário
     setProdForm({
       name: p.name,
       description: p.description,
@@ -809,6 +873,7 @@ export default function App() {
       length: String(p.length || 10),
       weight: String(p.weight || 1),
     });
+
     setView("PROD_FORM");
   };
 
@@ -2347,105 +2412,36 @@ export default function App() {
           )}
 
           {view === "DIMENSIONS" && (
-            <div className="max-w-4xl mx-auto animate-enter">
-              <h2 className="text-3xl font-bold text-slate-800 mb-2">
-                Dimensões dos Produtos
-              </h2>
-              <p className="text-slate-500 mb-8">
-                Cadastre as medidas padrão para cálculo de frete.
-              </p>
-
+            {/* Formulário Inteligente (Cria ou Edita) */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <PlusCircle size={20} className="text-purple-600" /> Novo
-                  Modelo
-                </h3>
-                <form
-                  onSubmit={handleSaveModel}
-                  className="flex flex-wrap gap-4 items-end"
-                >
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    {editingModelId ? <Edit size={20} className="text-blue-600"/> : <PlusCircle size={20} className="text-purple-600"/>}
+                    {editingModelId ? "Editar Modelo Existente" : "Novo Modelo"}
+                    </h3>
+                    {editingModelId && (
+                        <button onClick={() => { setEditingModelId(null); setModelForm({ name: "", height: "", width: "", length: "", weight: "" }); }} className="text-xs text-red-500 font-bold hover:underline">
+                            Cancelar Edição
+                        </button>
+                    )}
+                </div>
+                
+                <form onSubmit={handleSaveModel} className="flex flex-wrap gap-4 items-end">
                   <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                      Nome
-                    </label>
-                    <input
-                      required
-                      className="w-full px-4 py-2 rounded-xl border outline-none"
-                      value={modelForm.name}
-                      onChange={(e) =>
-                        setModelForm({ ...modelForm, name: e.target.value })
-                      }
-                    />
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nome</label>
+                    <input required className="w-full px-4 py-2 rounded-xl border outline-none focus:border-purple-500" value={modelForm.name} onChange={(e) => setModelForm({ ...modelForm, name: e.target.value })} />
                   </div>
-                  <div className="w-20">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                      Alt
-                    </label>
-                    <input
-                      required
-                      type="number"
-                      step="0.1"
-                      className="w-full px-3 py-2 rounded-xl border outline-none"
-                      value={modelForm.height}
-                      onChange={(e) =>
-                        setModelForm({ ...modelForm, height: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="w-20">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                      Larg
-                    </label>
-                    <input
-                      required
-                      type="number"
-                      step="0.1"
-                      className="w-full px-3 py-2 rounded-xl border outline-none"
-                      value={modelForm.width}
-                      onChange={(e) =>
-                        setModelForm({ ...modelForm, width: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="w-20">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                      Comp
-                    </label>
-                    <input
-                      required
-                      type="number"
-                      step="0.1"
-                      className="w-full px-3 py-2 rounded-xl border outline-none"
-                      value={modelForm.length}
-                      onChange={(e) =>
-                        setModelForm({ ...modelForm, length: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                      Peso(kg)
-                    </label>
-                    <input
-                      required
-                      type="number"
-                      step="0.001"
-                      className="w-full px-3 py-2 rounded-xl border outline-none"
-                      value={modelForm.weight}
-                      onChange={(e) =>
-                        setModelForm({ ...modelForm, weight: e.target.value })
-                      }
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-xl font-bold"
-                  >
-                    Salvar
+                  <div className="w-20"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Alt</label><input required type="number" step="0.1" className="w-full px-3 py-2 rounded-xl border outline-none" value={modelForm.height} onChange={(e) => setModelForm({ ...modelForm, height: e.target.value })} /></div>
+                  <div className="w-20"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Larg</label><input required type="number" step="0.1" className="w-full px-3 py-2 rounded-xl border outline-none" value={modelForm.width} onChange={(e) => setModelForm({ ...modelForm, width: e.target.value })} /></div>
+                  <div className="w-20"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Comp</label><input required type="number" step="0.1" className="w-full px-3 py-2 rounded-xl border outline-none" value={modelForm.length} onChange={(e) => setModelForm({ ...modelForm, length: e.target.value })} /></div>
+                  <div className="w-24"><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Peso(kg)</label><input required type="number" step="0.001" className="w-full px-3 py-2 rounded-xl border outline-none" value={modelForm.weight} onChange={(e) => setModelForm({ ...modelForm, weight: e.target.value })} /></div>
+                  <button type="submit" className={`px-6 py-2.5 rounded-xl font-bold text-white transition-all ${editingModelId ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700"}`}>
+                    {editingModelId ? "Atualizar Tudo" : "Salvar"}
                   </button>
                 </form>
               </div>
 
+              {/* Tabela com Botão Editar */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
@@ -2458,21 +2454,15 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {models.map((m) => (
-                      <tr key={m.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 font-bold text-slate-700">
-                          {m.name}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {m.height}x{m.width}x{m.length}cm
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {m.weight}kg
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => handleDeleteModel(m.id)}
-                            className="text-red-500"
-                          >
+                      <tr key={m.id} className={`hover:bg-slate-50 transition-colors ${editingModelId === m.id ? "bg-blue-50 border-l-4 border-blue-500" : ""}`}>
+                        <td className="px-6 py-4 font-bold text-slate-700">{m.name}</td>
+                        <td className="px-6 py-4 text-slate-600">{m.height}x{m.width}x{m.length}cm</td>
+                        <td className="px-6 py-4 text-slate-600">{m.weight}kg</td>
+                        <td className="px-6 py-4 text-right flex justify-end gap-2">
+                          <button onClick={() => handleEditModel(m)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg" title="Editar e Atualizar Produtos">
+                            <Edit size={18} />
+                          </button>
+                          <button onClick={() => handleDeleteModel(m.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg">
                             <Trash2 size={18} />
                           </button>
                         </td>
@@ -2481,8 +2471,6 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
 
           {view === "PROD_FORM" && (
             <div className="max-w-2xl mx-auto animate-enter pb-10">
