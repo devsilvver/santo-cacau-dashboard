@@ -423,7 +423,7 @@ export default function App() {
   const [ipForm, setIpForm] = useState({ ip: "", desc: "" });
   const [deleteModal, setDeleteModal] = useState<{
     open: boolean;
-    type: "PROD" | "IP" | null;
+    type: "PROD" | "IP" | "LOGS" | null;
     id: string | number | null;
   }>({ open: false, type: null, id: null });
 
@@ -959,9 +959,12 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_active: newStatus }),
       });
-      
+
       if (res.ok) {
-        showToast(`IP ${newStatus ? "Ativado" : "Desativado"} com sucesso!`, "success");
+        showToast(
+          `IP ${newStatus ? "Ativado" : "Desativado"} com sucesso!`,
+          "success"
+        );
         loadIps(); // Recarrega a lista para atualizar a cor
       } else {
         showToast("Erro ao alterar status.", "error");
@@ -972,29 +975,42 @@ export default function App() {
   };
 
   const confirmDelete = async () => {
-    if (!deleteModal.id) return;
+    // Verificação de segurança
+    if (deleteModal.type !== "LOGS" && !deleteModal.id) return;
+
     try {
-      let url =
-        deleteModal.type === "PROD"
-          ? `${API_URL}/api/products/${deleteModal.id}`
-          : `${API_URL}/api/allowed-ips/${deleteModal.id}`;
-      const res = await fetch(url, { method: "DELETE" });
+      let url = "";
+      let method = "DELETE";
+
+      // Define a URL baseada no tipo
+      if (deleteModal.type === "PROD")
+        url = `${API_URL}/api/products/${deleteModal.id}`;
+      else if (deleteModal.type === "IP")
+        url = `${API_URL}/api/allowed-ips/${deleteModal.id}`;
+      else if (deleteModal.type === "LOGS") url = `${API_URL}/api/admin/logs`; // Nova rota
+
+      const res = await fetch(url, { method });
+
       if (res.status === 403) {
         setIsAuthorized(false);
         return;
       }
 
+      // Atualiza a tela após o sucesso
       if (deleteModal.type === "PROD") {
         loadProducts();
         showToast("Produto excluído.", "success");
-      } else {
+      } else if (deleteModal.type === "IP") {
         loadIps();
         showToast("Acesso revogado.", "success");
+      } else if (deleteModal.type === "LOGS") {
+        setLogs([]); // Limpa a tela na hora
+        showToast("Histórico de logs apagado do banco de dados.", "success");
       }
 
       setDeleteModal({ open: false, type: null, id: null });
     } catch (e) {
-      showToast("Erro ao excluir.", "error");
+      showToast("Erro ao processar solicitação.", "error");
     }
   };
 
@@ -2177,10 +2193,12 @@ export default function App() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setLogs([])}
-                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                    onClick={() =>
+                      setDeleteModal({ open: true, type: "LOGS", id: 0 })
+                    } // Abre o modal
+                    className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
                   >
-                    Limpar
+                    <Trash2 size={16} /> Limpar Histórico
                   </button>
                   <div className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm animate-pulse">
                     <span className="w-2 h-2 bg-blue-500 rounded-full"></span>{" "}
@@ -2207,14 +2225,14 @@ export default function App() {
                       <div
                         key={index}
                         className={`flex gap-3 p-2 rounded transition-colors border-l-2 ${
-                            log.type === "ACTION" 
-                                ? "bg-slate-800/80 border-cyan-500 hover:bg-slate-800" // Estilo para Ações do Admin
-                                : "hover:bg-slate-800/50 border-transparent hover:border-yellow-500 text-slate-300" // Estilo Padrão
+                          log.type === "ACTION"
+                            ? "bg-slate-800/80 border-cyan-500 hover:bg-slate-800" // Estilo para Ações do Admin
+                            : "hover:bg-slate-800/50 border-transparent hover:border-yellow-500 text-slate-300" // Estilo Padrão
                         }`}
                       >
                         {/* DATA E HORA COMPLETA */}
                         <span className="text-slate-500 shrink-0 text-xs mt-0.5 w-32">
-                          {new Date(log.timestamp).toLocaleString('pt-BR')}
+                          {new Date(log.timestamp).toLocaleString("pt-BR")}
                         </span>
 
                         {/* TIPO DO LOG (Colorido) */}
@@ -2236,7 +2254,13 @@ export default function App() {
                         </span>
 
                         {/* MENSAGEM */}
-                        <span className={`break-all text-sm ${log.type === "ACTION" ? "text-white font-medium" : "text-slate-300"}`}>
+                        <span
+                          className={`break-all text-sm ${
+                            log.type === "ACTION"
+                              ? "text-white font-medium"
+                              : "text-slate-300"
+                          }`}
+                        >
                           {log.message}
                         </span>
                       </div>
@@ -2304,30 +2328,49 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {ips.map((ip) => (
-                      <tr key={ip.id} className={`hover:bg-slate-50 transition-colors ${ip.is_active ? '' : 'opacity-60 bg-gray-50'}`}>
+                      <tr
+                        key={ip.id}
+                        className={`hover:bg-slate-50 transition-colors ${
+                          ip.is_active ? "" : "opacity-60 bg-gray-50"
+                        }`}
+                      >
                         <td className="px-6 py-4 font-mono text-slate-600 flex items-center gap-2">
                           {/* INDICADOR VISUAL */}
-                          <div className={`w-2 h-2 rounded-full ${ip.is_active ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-400'}`}></div>
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              ip.is_active
+                                ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"
+                                : "bg-red-400"
+                            }`}
+                          ></div>
                           {ip.ip_address}
                         </td>
                         <td className="px-6 py-4">
-                            {ip.description}
-                            {!ip.is_active && <span className="ml-2 text-[10px] uppercase font-bold text-red-500 border border-red-200 px-1 rounded">Desligado</span>}
+                          {ip.description}
+                          {!ip.is_active && (
+                            <span className="ml-2 text-[10px] uppercase font-bold text-red-500 border border-red-200 px-1 rounded">
+                              Desligado
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right flex justify-end items-center gap-2">
                           {/* BOTÃO POWER */}
                           <button
                             onClick={() => toggleIpStatus(ip.id, ip.is_active)}
                             className={`p-2 rounded-lg transition-all ${
-                                ip.is_active 
-                                ? 'text-green-600 hover:bg-green-50 hover:scale-110' 
-                                : 'text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                              ip.is_active
+                                ? "text-green-600 hover:bg-green-50 hover:scale-110"
+                                : "text-slate-400 hover:bg-slate-200 hover:text-slate-600"
                             }`}
-                            title={ip.is_active ? "Desativar Acesso" : "Ativar Acesso"}
+                            title={
+                              ip.is_active
+                                ? "Desativar Acesso"
+                                : "Ativar Acesso"
+                            }
                           >
                             <Power size={18} />
                           </button>
-                          
+
                           <button
                             onClick={() =>
                               setDeleteModal({
