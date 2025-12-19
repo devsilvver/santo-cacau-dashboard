@@ -40,6 +40,7 @@ import {
   Ruler,
   CheckCircle,
   Info,
+  Power,
 } from "lucide-react";
 
 const API_URL = "https://api-celeiro-da-cachaca.onrender.com";
@@ -115,6 +116,7 @@ interface AllowedIp {
   ip_address: string;
   description: string;
   created_at: string;
+  is_active: number;
 }
 interface LogMessage {
   type: string;
@@ -948,6 +950,27 @@ export default function App() {
       showToast("Erro ao salvar IP.", "error");
     }
   };
+
+  const toggleIpStatus = async (id: number, currentStatus: number) => {
+    const newStatus = currentStatus === 1 ? 0 : 1;
+    try {
+      const res = await fetch(`${API_URL}/api/allowed-ips/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: newStatus }),
+      });
+      
+      if (res.ok) {
+        showToast(`IP ${newStatus ? "Ativado" : "Desativado"} com sucesso!`, "success");
+        loadIps(); // Recarrega a lista para atualizar a cor
+      } else {
+        showToast("Erro ao alterar status.", "error");
+      }
+    } catch (e) {
+      showToast("Erro de conexão.", "error");
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteModal.id) return;
     try {
@@ -2183,33 +2206,42 @@ export default function App() {
                     logs.map((log, index) => (
                       <div
                         key={index}
-                        className="flex gap-3 text-slate-300 hover:bg-slate-800/50 p-2 rounded transition-colors border-l-2 border-transparent hover:border-yellow-500"
+                        className={`flex gap-3 p-2 rounded transition-colors border-l-2 ${
+                            log.type === "ACTION" 
+                                ? "bg-slate-800/80 border-cyan-500 hover:bg-slate-800" // Estilo para Ações do Admin
+                                : "hover:bg-slate-800/50 border-transparent hover:border-yellow-500 text-slate-300" // Estilo Padrão
+                        }`}
                       >
-                        <span className="text-slate-500 shrink-0">
-                          [{new Date(log.timestamp).toLocaleTimeString()}]
+                        {/* DATA E HORA COMPLETA */}
+                        <span className="text-slate-500 shrink-0 text-xs mt-0.5 w-32">
+                          {new Date(log.timestamp).toLocaleString('pt-BR')}
                         </span>
+
+                        {/* TIPO DO LOG (Colorido) */}
                         <span
-                          className={`font-bold shrink-0 ${
+                          className={`font-bold shrink-0 uppercase text-xs mt-0.5 w-20 ${
                             log.type === "ACCESS_DENIED" || log.type === "BLOCK"
                               ? "text-red-500"
+                              : log.type === "ACTION"
+                              ? "text-cyan-400" // Cor nova para ações
                               : "text-blue-400"
                           }`}
                         >
                           {log.type}
                         </span>
-                        <span className="text-slate-400 shrink-0">
+
+                        {/* IP */}
+                        <span className="text-slate-500 shrink-0 text-xs mt-0.5 w-24 font-mono">
                           {log.ip}
                         </span>
-                        <span className="text-white break-all">
+
+                        {/* MENSAGEM */}
+                        <span className={`break-all text-sm ${log.type === "ACTION" ? "text-white font-medium" : "text-slate-300"}`}>
                           {log.message}
                         </span>
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {view === "SECURITY" && (
             <div className="max-w-4xl mx-auto animate-enter">
@@ -2268,12 +2300,30 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {ips.map((ip) => (
-                      <tr key={ip.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 font-mono text-slate-600">
+                      <tr key={ip.id} className={`hover:bg-slate-50 transition-colors ${ip.is_active ? '' : 'opacity-60 bg-gray-50'}`}>
+                        <td className="px-6 py-4 font-mono text-slate-600 flex items-center gap-2">
+                          {/* INDICADOR VISUAL */}
+                          <div className={`w-2 h-2 rounded-full ${ip.is_active ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-400'}`}></div>
                           {ip.ip_address}
                         </td>
-                        <td className="px-6 py-4">{ip.description}</td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4">
+                            {ip.description}
+                            {!ip.is_active && <span className="ml-2 text-[10px] uppercase font-bold text-red-500 border border-red-200 px-1 rounded">Desligado</span>}
+                        </td>
+                        <td className="px-6 py-4 text-right flex justify-end items-center gap-2">
+                          {/* BOTÃO POWER */}
+                          <button
+                            onClick={() => toggleIpStatus(ip.id, ip.is_active)}
+                            className={`p-2 rounded-lg transition-all ${
+                                ip.is_active 
+                                ? 'text-green-600 hover:bg-green-50 hover:scale-110' 
+                                : 'text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                            }`}
+                            title={ip.is_active ? "Desativar Acesso" : "Ativar Acesso"}
+                          >
+                            <Power size={18} />
+                          </button>
+                          
                           <button
                             onClick={() =>
                               setDeleteModal({
@@ -2282,7 +2332,7 @@ export default function App() {
                                 id: ip.id,
                               })
                             }
-                            className="text-red-500"
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                           >
                             <Trash2 size={18} />
                           </button>
