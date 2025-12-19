@@ -1753,6 +1753,45 @@ export default function App() {
                                     </p>
                                   </div>
                                 </div>
+                                {o.shipping_method && !o.shipping_method.includes("Retirada") && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation(); // Evita fechar o acordeão
+                                      if(!confirm(`Gerar etiqueta para o pedido #${o.id}?`)) return;
+                                      
+                                      // Feedback visual simples
+                                      const btn = e.currentTarget;
+                                      const originalText = btn.innerText;
+                                      btn.innerText = "Gerando...";
+                                      btn.disabled = true;
+
+                                      try {
+                                        const res = await fetch(`${API_URL}/api/admin/orders/${o.id}/generate-label`, {
+                                            method: "POST"
+                                        });
+                                        const data = await res.json();
+                                        
+                                        if (res.ok) {
+                                            alert("Sucesso! O pedido foi enviado para o seu Carrinho no Melhor Envio.\nAcesse o site do Melhor Envio para pagar e imprimir.");
+                                        } else {
+                                            alert("Erro: " + (data.details || data.error));
+                                        }
+                                      } catch (err) {
+                                        alert("Erro de conexão com o servidor.");
+                                      } finally {
+                                        btn.innerText = originalText;
+                                        btn.disabled = false;
+                                      }
+                                    }}
+                                    className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                                  >
+                                    <Truck size={14} /> Gerar Etiqueta M. Envio
+                                  </button>
+                                )}
+                                {/* FIM CÓDIGO NOVO */}
+
+                                <div className="flex items-center gap-3">
+                                  <CreditCard
                                 <div className="flex items-center gap-3">
                                   <CreditCard
                                     size={20}
