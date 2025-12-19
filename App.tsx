@@ -94,9 +94,9 @@ interface Order {
   email: string;
   phone: string;
   items: OrderItem[];
-  shipping_method: string;
+  shipping_method: string; 
   // NOVO CAMPO: Recebe o valor do banco
-  payment_method_chosen: string;
+  payment_method_chosen: string; 
 }
 
 interface AllowedIp {
@@ -503,70 +503,65 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/admin/orders`);
       if (res.ok) {
         const data = await res.json();
-
+        
         const processedOrders = data.map((order: any) => {
-          let itemsArray = [];
+            let itemsArray = [];
+            
+            // Mapeamento para nomes amigáveis no Dashboard
+            const PAYMENT_METHODS_MAP: any = {
+                'PIX': 'Pix',
+                'CREDIT': 'Cartão de Crédito (À Vista)',
+                'INSTALLMENTS': 'Cartão (Parcelado - 6x)',
+                'BILLET': 'Boleto Bancário',
+                'MONEY': 'Dinheiro (Retirada)',
+                'MP_CONFIRM': 'MP - Aguardando Confirmação'
+            };
 
-          // Mapeamento para nomes amigáveis no Dashboard
-          const PAYMENT_METHODS_MAP: any = {
-            PIX: "Pix",
-            CREDIT: "Cartão de Crédito (À Vista)",
-            INSTALLMENTS: "Cartão (Parcelado - 6x)",
-            BILLET: "Boleto Bancário",
-            MONEY: "Dinheiro (Retirada)",
-            MP_CONFIRM: "MP - Aguardando Confirmação",
-          };
-
-          // 1. CORREÇÃO: Transforma a string JSON de itens em um array de objetos
-          if (typeof order.items === "string" && order.items.length > 0) {
-            try {
-              itemsArray = JSON.parse(order.items);
-            } catch (e) {
-              console.error("Erro ao fazer parse dos itens:", e);
+            // 1. CORREÇÃO: Transforma a string JSON de itens em um array de objetos
+            if (typeof order.items === 'string' && order.items.length > 0) {
+                try {
+                    itemsArray = JSON.parse(order.items);
+                } catch (e) {
+                    console.error("Erro ao fazer parse dos itens:", e);
+                }
+            } else if (Array.isArray(order.items)) {
+                itemsArray = order.items;
             }
-          } else if (Array.isArray(order.items)) {
-            itemsArray = order.items;
-          }
 
-          // 2. Lógica para determinar o nome do pagamento real
-          // Prioriza o valor do DB, senão usa o MP_ID para status "aprovado" genérico
-          const finalPaymentDisplay =
-            PAYMENT_METHODS_MAP[order.payment_method_chosen] ||
-            (order.mp_payment_id
-              ? PAYMENT_METHODS_MAP["MP_CONFIRM"]
-              : "Método Não Registrado");
+            // 2. Lógica para determinar o nome do pagamento real
+            // Prioriza o valor do DB, senão usa o MP_ID para status "aprovado" genérico
+            const finalPaymentDisplay = PAYMENT_METHODS_MAP[order.payment_method_chosen] || (order.mp_payment_id ? PAYMENT_METHODS_MAP['MP_CONFIRM'] : 'Método Não Registrado');
 
-          // 3. Lógica para pedidos antigos e endereços (mantida)
-          const finalShippingMethod =
-            order.shipping_method ||
-            (String(order.shipping_address).includes("SEDEX") ||
-            String(order.shipping_address).includes("Retirada")
-              ? order.shipping_address
-              : "Método Não Registrado");
+            // 3. Lógica para pedidos antigos e endereços (mantida)
+            const finalShippingMethod = order.shipping_method || (
+                String(order.shipping_address).includes("SEDEX") || 
+                String(order.shipping_address).includes("Retirada") 
+                ? order.shipping_address 
+                : "Método Não Registrado"
+            );
 
-          const finalShippingAddress =
-            String(order.shipping_address).includes("SEDEX") ||
-            String(order.shipping_address).includes("Retirada")
-              ? "Endereço Pendente/Não Registrado"
-              : order.shipping_address || "Endereço Não Registrado";
+            const finalShippingAddress = (
+                String(order.shipping_address).includes("SEDEX") || 
+                String(order.shipping_address).includes("Retirada")
+            ) ? "Endereço Pendente/Não Registrado" : order.shipping_address || "Endereço Não Registrado";
 
-          // 4. RETORNO FINAL
-          return {
-            ...order,
-            items: itemsArray,
-            shipping_method: finalShippingMethod,
-            payment_method: finalPaymentDisplay, // <-- AGORA É O NOME AMIGÁVEL
-            shipping_address: finalShippingAddress,
-          };
+            // 4. RETORNO FINAL
+            return {
+                ...order,
+                items: itemsArray, 
+                shipping_method: finalShippingMethod,
+                payment_method: finalPaymentDisplay, // <-- AGORA É O NOME AMIGÁVEL
+                shipping_address: finalShippingAddress,
+            };
         });
 
         setOrders(processedOrders);
       }
     } catch (e) {
-      console.error("Erro ao carregar pedidos:", e);
+        console.error("Erro ao carregar pedidos:", e);
     }
   };
-
+  
   const loadIps = async () => {
     try {
       const res = await fetch(`${API_URL}/api/allowed-ips`);
@@ -871,24 +866,16 @@ export default function App() {
         <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
       </div>
     );
-  // ... (mantenha os imports e o código anterior igual)
-
-  if (isCheckingAuth)
-    return (
-      <div className="h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
-      </div>
-    );
-
   if (!isAuthorized)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white p-10 rounded-2xl shadow-xl shadow-slate-200/60 text-center w-full max-w-md border border-slate-100">
+          
           {/* Ícone com fundo circular */}
           <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Lock className="w-10 h-10 text-red-500" strokeWidth={1.5} />
           </div>
-
+          
           {/* Títulos */}
           <h1 className="text-2xl font-bold text-slate-900 mb-2">
             Área Restrita
@@ -903,6 +890,7 @@ export default function App() {
               © 2025 Celeiro da Cachaça
             </p>
           </div>
+          
         </div>
       </div>
     );
@@ -2340,86 +2328,7 @@ export default function App() {
                         />
                       </div>
                     </div>
-                    <div className="col-span-1 md:col-span-2 bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
-                      <h4 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2">
-                        <PackageOpen size={16} /> Dimensões para Frete (Unidade
-                        + Plástico Bolha)
-                      </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <label className="text-xs font-bold text-blue-600 uppercase">
-                            Altura (cm)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            className="w-full mt-1 p-2 border rounded-lg text-sm"
-                            placeholder="Ex: 25"
-                            value={(prodForm as any).height || ""}
-                            onChange={(e) =>
-                              setProdForm({
-                                ...prodForm,
-                                height: e.target.value,
-                              } as any)
-                            }
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-blue-600 uppercase">
-                            Largura (cm)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            className="w-full mt-1 p-2 border rounded-lg text-sm"
-                            placeholder="Ex: 10"
-                            value={(prodForm as any).width || ""}
-                            onChange={(e) =>
-                              setProdForm({
-                                ...prodForm,
-                                width: e.target.value,
-                              } as any)
-                            }
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-blue-600 uppercase">
-                            Comprimento (cm)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            className="w-full mt-1 p-2 border rounded-lg text-sm"
-                            placeholder="Ex: 10"
-                            value={(prodForm as any).length || ""}
-                            onChange={(e) =>
-                              setProdForm({
-                                ...prodForm,
-                                length: e.target.value,
-                              } as any)
-                            }
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-blue-600 uppercase">
-                            Peso (kg)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            className="w-full mt-1 p-2 border rounded-lg text-sm"
-                            placeholder="Ex: 0.500"
-                            value={(prodForm as any).weight || ""}
-                            onChange={(e) =>
-                              setProdForm({
-                                ...prodForm,
-                                weight: e.target.value,
-                              } as any)
-                            }
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    {/* SEÇÃO "DIMENSÕES PARA FRETE" REMOVIDA AQUI */}
                     <div className="col-span-1 md:col-span-2">
                       <label className="block text-sm font-bold text-slate-700 mb-1">
                         URL da Imagem
