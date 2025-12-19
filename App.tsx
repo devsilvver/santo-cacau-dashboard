@@ -38,6 +38,8 @@ import {
   Home,
   ChevronDown,
   Ruler,
+  CheckCircle,
+  Info,
 } from "lucide-react";
 
 const API_URL = "https://api-celeiro-da-cachaca.onrender.com";
@@ -973,6 +975,43 @@ export default function App() {
     }
   };
 
+  /// --- NOVA FUNÇÃO DE GERAR ETIQUETA ---
+  const handleGenerateLabel = async (orderId: number) => {
+    // 1. Aviso visual de carregamento
+    showToast("Conectando ao Melhor Envio...", "warning");
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/admin/orders/${orderId}/generate-label`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (res.ok && (data.success || data.protocol)) {
+        showToast(
+          "Sucesso! Etiqueta enviada para o carrinho do Melhor Envio.",
+          "success"
+        );
+      } else {
+        // 2. Mostra o erro real se houver (Ex: CPF inválido ou Peso Zero)
+        const errorMessage = data.details
+          ? JSON.stringify(data.details)
+          : data.error || "Erro desconhecido ao gerar etiqueta";
+        console.error("Erro Etiqueta:", data);
+        showToast(`Erro: ${errorMessage}`, "error");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("Erro de conexão com o servidor.", "error");
+    }
+  };
+
   // Funções de formatação
   const formatMoney = (v: any) => {
     // Garante que a entrada seja tratada como número
@@ -1061,28 +1100,54 @@ export default function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       {/* --- INSERIR AQUI O BLOCO DE TOASTS --- */}
-      <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
-        {toasts.map((toast) => (
+      {/* --- NOTIFICAÇÕES ESTILIZADAS (NOVO BLOCO) --- */}
+      <div className="fixed top-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+        {toasts.map((t) => (
           <div
-            key={toast.id}
-            className={`pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl animate-enter border-l-4 ${
-              toast.type === "success"
-                ? "bg-white border-green-500 text-green-800"
-                : toast.type === "error"
-                ? "bg-white border-red-500 text-red-800"
-                : "bg-white border-yellow-500 text-yellow-800"
+            key={t.id}
+            className={`pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl transform transition-all animate-enter border-l-4 bg-white ${
+              t.type === "success"
+                ? "border-green-500 text-slate-700"
+                : t.type === "error"
+                ? "border-red-500 text-slate-700"
+                : "border-yellow-500 text-slate-700"
             }`}
           >
-            {toast.type === "success" && (
-              <CheckCircle2 size={20} className="text-green-500" />
-            )}
-            {toast.type === "error" && (
-              <XCircle size={20} className="text-red-500" />
-            )}
-            {toast.type === "warning" && (
-              <AlertCircle size={20} className="text-yellow-500" />
-            )}
-            <span className="font-medium text-sm">{toast.message}</span>
+            <div
+              className={`p-2 rounded-full shrink-0 ${
+                t.type === "success"
+                  ? "bg-green-100 text-green-600"
+                  : t.type === "error"
+                  ? "bg-red-100 text-red-600"
+                  : "bg-yellow-100 text-yellow-600"
+              }`}
+            >
+              {t.type === "success" ? (
+                <CheckCircle size={20} />
+              ) : t.type === "error" ? (
+                <AlertCircle size={20} />
+              ) : (
+                <Info size={20} />
+              )}
+            </div>
+            <div className="min-w-[200px]">
+              <p className="font-bold text-sm mb-0.5">
+                {t.type === "success"
+                  ? "Sucesso"
+                  : t.type === "error"
+                  ? "Erro"
+                  : "Atenção"}
+              </p>
+              <p className="text-xs text-slate-500 leading-snug">{t.message}</p>
+            </div>
+            <button
+              onClick={() =>
+                setToasts((prev) => prev.filter((item) => item.id !== t.id))
+              }
+              className="ml-2 text-slate-300 hover:text-slate-500 transition-colors"
+            >
+              <X size={18} />
+            </button>
           </div>
         ))}
       </div>
@@ -1920,50 +1985,11 @@ export default function App() {
                                 {o.shipping_method &&
                                   !o.shipping_method.includes("Retirada") && (
                                     <button
-                                      onClick={async (e) => {
-                                        e.stopPropagation(); // Evita fechar o acordeão
-                                        if (
-                                          !confirm(
-                                            `Gerar etiqueta para o pedido #${o.id}?`
-                                          )
-                                        )
-                                          return;
-
-                                        // Feedback visual simples
-                                        const btn = e.currentTarget;
-                                        const originalText = btn.innerText;
-                                        btn.innerText = "Gerando...";
-                                        btn.disabled = true;
-
-                                        try {
-                                          const res = await fetch(
-                                            `${API_URL}/api/admin/orders/${o.id}/generate-label`,
-                                            {
-                                              method: "POST",
-                                            }
-                                          );
-                                          const data = await res.json();
-
-                                          if (res.ok) {
-                                            alert(
-                                              "Sucesso! O pedido foi enviado para o seu Carrinho no Melhor Envio.\nAcesse o site do Melhor Envio para pagar e imprimir."
-                                            );
-                                          } else {
-                                            alert(
-                                              "Erro: " +
-                                                (data.details || data.error)
-                                            );
-                                          }
-                                        } catch (err) {
-                                          alert(
-                                            "Erro de conexão com o servidor."
-                                          );
-                                        } finally {
-                                          btn.innerText = originalText;
-                                          btn.disabled = false;
-                                        }
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Não fecha o detalhe do pedido
+                                        handleGenerateLabel(o.id); // Chama a nova função
                                       }}
-                                      className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                                      className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm active:scale-95"
                                     >
                                       <Truck size={14} /> Gerar Etiqueta M.
                                       Envio
