@@ -181,32 +181,6 @@ const CarouselPreview = ({ slides }: { slides: HeroSlide[] }) => {
     subtitle: "...",
   };
 
-  // --- NOVO: LIMPAR CARRINHO APÓS COMPRA APROVADA ---
-  useEffect(() => {
-    // 1. Verifica a URL atual
-    const queryParams = new URLSearchParams(window.location.search);
-    const status = queryParams.get("status"); // Ex: approved
-    const paymentId = queryParams.get("payment_id"); // ID do MP
-
-    // 2. Se a compra foi aprovada
-    if (status === "approved" && paymentId) {
-      // Limpa o estado do carrinho visual
-      setCart([]);
-
-      // Limpa a memória do navegador
-      localStorage.removeItem("celeiro_cart");
-
-      // Limpa a URL para o cliente não ver aquele monte de código (opcional, mas recomendado)
-      window.history.replaceState({}, document.title, window.location.pathname);
-
-      // Avisa o cliente
-      showToast(
-        "Compra confirmada com sucesso! Sua sacola foi limpa.",
-        "success"
-      );
-    }
-  }, []); // Roda apenas 1 vez quando a tela carrega
-
   return (
     <div className="w-full aspect-video bg-slate-900 rounded-xl overflow-hidden relative group border border-slate-200 shadow-sm">
       {/* Imagem de Fundo */}
