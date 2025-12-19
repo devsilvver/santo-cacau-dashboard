@@ -145,6 +145,21 @@ interface SiteConfig {
   hero_slides: HeroSlide[]; // Novo campo para o carrossel
 }
 
+// --- FUNÇÃO DE MÁSCARA DE PESO (NOVO) ---
+const formatWeightInput = (value: string) => {
+  // 1. Remove tudo que não for número
+  const numbers = value.replace(/\D/g, "");
+
+  // 2. Se estiver vazio, retorna vazio
+  if (!numbers) return "";
+
+  // 3. Converte para decimal (divide por 1000 para ter 3 casas)
+  // Ex: "1045" vira 1.045
+  const formatted = (parseInt(numbers) / 1000).toFixed(3);
+
+  return formatted;
+};
+
 // --- COMPONENTES DE PRÉ-VISUALIZAÇÃO ---
 
 const CarouselPreview = ({ slides }: { slides: HeroSlide[] }) => {
@@ -2471,13 +2486,15 @@ export default function App() {
                     </label>
                     <input
                       required
-                      type="number"
-                      step="0.001"
+                      type="text"
                       placeholder="0.200"
                       className="w-full px-3 py-2 rounded-xl border outline-none"
                       value={boxForm.weight}
                       onChange={(e) =>
-                        setBoxForm({ ...boxForm, weight: e.target.value })
+                        setBoxForm({
+                          ...boxForm,
+                          weight: formatWeightInput(e.target.value),
+                        })
                       }
                     />
                   </div>
@@ -2641,12 +2658,14 @@ export default function App() {
                     </label>
                     <input
                       required
-                      type="number"
-                      step="0.001"
+                      type="text"
                       className="w-full px-3 py-2 rounded-xl border outline-none"
                       value={modelForm.weight}
                       onChange={(e) =>
-                        setModelForm({ ...modelForm, weight: e.target.value })
+                        setModelForm({
+                          ...modelForm,
+                          weight: formatWeightInput(e.target.value),
+                        })
                       }
                     />
                   </div>
