@@ -31,13 +31,13 @@ import {
   AlertCircle,
   Monitor,
   PackageOpen,
-  // ÍCONES ADICIONADOS/CORRIGIDOS
   Mail,
   Phone,
   Truck,
   CreditCard,
   Home,
   ChevronDown,
+  Ruler,
 } from "lucide-react";
 
 const API_URL = "https://api-celeiro-da-cachaca.onrender.com";
@@ -51,6 +51,15 @@ interface Toast {
 }
 
 interface ShippingBox {
+  id: number;
+  name: string;
+  height: string;
+  width: string;
+  length: string;
+  weight: string;
+}
+
+interface ProductModel {
   id: number;
   name: string;
   height: string;
@@ -331,6 +340,21 @@ export default function App() {
     weight: "",
   });
 
+  const [models, setModels] = useState<ProductModel[]>([]);
+  const [modelForm, setModelForm] = useState({
+    name: "",
+    height: "",
+    width: "",
+    length: "",
+    weight: "",
+  });
+
+  // NOVOS ESTADOS PARA O FORMULÁRIO DE PRODUTO
+  const [prodCategory, setProdCategory] = useState<"CACHACA" | "GENERAL">(
+    "CACHACA"
+  );
+  const [selectedModelId, setSelectedModelId] = useState("");
+
   const [products, setProducts] = useState<Product[]>([]);
   // Atualizando o tipo da lista de pedidos
   const [orders, setOrders] = useState<Order[]>([]);
@@ -379,12 +403,16 @@ export default function App() {
     name: "",
     description: "",
     price: "",
-    packaging: "Garrafa PET",
+    packaging: "",
     type: "Curtida",
     imageUrl: "",
     abv: "38.0",
     volume: "1L",
     stock_quantity: "0",
+    height: "",
+    width: "",
+    length: "",
+    weight: "",
   });
   const [ipForm, setIpForm] = useState({ ip: "", desc: "" });
   const [deleteModal, setDeleteModal] = useState<{
@@ -464,6 +492,57 @@ export default function App() {
       if (res.ok) setBoxes(await res.json());
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const loadModels = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/product-models`);
+      if (res.ok) setModels(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveModel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await fetch(`${API_URL}/api/product-models`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(modelForm),
+      });
+      loadModels();
+      setModelForm({ name: "", height: "", width: "", length: "", weight: "" });
+      showToast("Modelo salvo!", "success");
+    } catch {
+      showToast("Erro ao salvar", "error");
+    }
+  };
+
+  const handleDeleteModel = async (id: number) => {
+    if (!confirm("Deletar modelo?")) return;
+    try {
+      await fetch(`${API_URL}/api/product-models/${id}`, { method: "DELETE" });
+      loadModels();
+      showToast("Modelo deletado", "success");
+    } catch {
+      showToast("Erro ao deletar", "error");
+    }
+  };
+
+  const handleSelectModel = (modelId: string) => {
+    setSelectedModelId(modelId);
+    const model = models.find((m) => String(m.id) === modelId);
+    if (model) {
+      setProdForm((prev) => ({
+        ...prev,
+        packaging: prodCategory === "CACHACA" ? model.name : "Padrão",
+        height: String(model.height),
+        width: String(model.width),
+        length: String(model.length),
+        weight: String(model.weight),
+      }));
     }
   };
 
@@ -617,19 +696,15 @@ export default function App() {
         loadSiteConfig();
       }
       if (view === "SHIPPING_BOXES") loadBoxes();
+      if (view === "DIMENSIONS") loadModels();
     }
   }, [view, isAuthorized]);
 
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const priceString = String(prodForm.price).replace(",", ".");
-    const abvString = String(prodForm.abv).replace(",", ".");
-    const priceFinal = parseFloat(priceString);
-    const abvFinal = parseFloat(abvString);
-
-    if (isNaN(priceFinal) || isNaN(abvFinal)) {
+    if (!prodForm.height || !prodForm.weight) {
       showToast(
-        "O preço e o teor alcoólico devem ser números válidos.",
+        "Selecione um Modelo de Dimensão para calcular o frete.",
         "warning"
       );
       return;
@@ -637,10 +712,18 @@ export default function App() {
 
     const payload = {
       ...prodForm,
-      price: priceFinal,
-      abv: abvFinal,
+      price: parseFloat(String(prodForm.price).replace(",", ".")),
+      abv:
+        prodCategory === "CACHACA"
+          ? parseFloat(String(prodForm.abv).replace(",", "."))
+          : 0,
       stock_quantity: Number(prodForm.stock_quantity),
+      packaging:
+        prodCategory === "CACHACA" ? prodForm.packaging : "Produto Diverso",
+      type: prodCategory === "CACHACA" ? prodForm.type : "Geral",
+      volume: prodCategory === "CACHACA" ? prodForm.volume : "-",
     };
+
     const method = editingId ? "PUT" : "POST";
     const url = editingId
       ? `${API_URL}/api/products/${editingId}`
@@ -652,27 +735,15 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (res.status === 403) {
-        setIsAuthorized(false);
-        return;
-      }
-
       if (res.ok) {
-        await loadProducts();
-        if (!editingId) handleCreateProd();
+        loadProducts();
         setView("PRODUCTS");
-        showToast(
-          editingId
-            ? "Produto atualizado com sucesso!"
-            : "Produto criado com sucesso!",
-          "success"
-        );
+        showToast("Produto salvo!", "success");
       } else {
-        const errorData = await res.json();
-        showToast("Erro: " + (errorData.error || errorData.message), "error");
+        showToast("Erro ao salvar produto", "error");
       }
-    } catch (e) {
-      showToast("Erro de conexão com o servidor.", "error");
+    } catch {
+      showToast("Erro de conexão", "error");
     }
   };
 
@@ -707,8 +778,10 @@ export default function App() {
       );
   };
 
-  const handleEditProd = (p: Product) => {
+  const handleEditProd = async (p: Product) => {
+    await loadModels();
     setEditingId(p.id);
+    setProdCategory(p.abv > 0 ? "CACHACA" : "GENERAL");
     setProdForm({
       name: p.name,
       description: p.description,
@@ -716,26 +789,36 @@ export default function App() {
       packaging: p.packaging,
       type: p.type,
       imageUrl: p.image_url,
-      abv: String(p.abv),
-      volume: p.volume,
+      abv: String(p.abv || 0),
+      volume: p.volume || "",
       stock_quantity: String(p.stock_quantity),
+      height: String(p.height || 20),
+      width: String(p.width || 10),
+      length: String(p.length || 10),
+      weight: String(p.weight || 1),
     });
     setView("PROD_FORM");
-    setIsSidebarOpen(false);
   };
 
-  const handleCreateProd = () => {
+  const handleCreateProd = async () => {
+    await loadModels();
     setEditingId(null);
+    setProdCategory("CACHACA");
+    setSelectedModelId("");
     setProdForm({
       name: "",
       description: "",
       price: "",
-      packaging: "Garrafa PET",
+      packaging: "",
       type: "Curtida",
       imageUrl: "",
       abv: "38.0",
       volume: "1L",
       stock_quantity: "0",
+      height: "",
+      width: "",
+      length: "",
+      weight: "",
     });
     setView("PROD_FORM");
   };
@@ -973,6 +1056,7 @@ export default function App() {
           {[
             { id: "PRODUCTS", icon: LayoutDashboard, label: "Produtos" },
             { id: "SHIPPING_BOXES", icon: PackageOpen, label: "Embalagens" },
+            { id: "DIMENSIONS", icon: Ruler, label: "Dimensões & Modelos" },
             { id: "SALES", icon: ShoppingBag, label: "Vendas" },
             { id: "SITE_CONFIG", icon: Palette, label: "Marketing & Site" },
             { id: "SECURITY", icon: Shield, label: "Segurança" },
@@ -2250,117 +2334,228 @@ export default function App() {
             </div>
           )}
 
+          {view === "DIMENSIONS" && (
+            <div className="max-w-4xl mx-auto animate-enter">
+              <h2 className="text-3xl font-bold text-slate-800 mb-2">
+                Dimensões dos Produtos
+              </h2>
+              <p className="text-slate-500 mb-8">
+                Cadastre as medidas padrão para cálculo de frete.
+              </p>
+
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <PlusCircle size={20} className="text-purple-600" /> Novo
+                  Modelo
+                </h3>
+                <form
+                  onSubmit={handleSaveModel}
+                  className="flex flex-wrap gap-4 items-end"
+                >
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                      Nome
+                    </label>
+                    <input
+                      required
+                      className="w-full px-4 py-2 rounded-xl border outline-none"
+                      value={modelForm.name}
+                      onChange={(e) =>
+                        setModelForm({ ...modelForm, name: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="w-20">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                      Alt
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="0.1"
+                      className="w-full px-3 py-2 rounded-xl border outline-none"
+                      value={modelForm.height}
+                      onChange={(e) =>
+                        setModelForm({ ...modelForm, height: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="w-20">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                      Larg
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="0.1"
+                      className="w-full px-3 py-2 rounded-xl border outline-none"
+                      value={modelForm.width}
+                      onChange={(e) =>
+                        setModelForm({ ...modelForm, width: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="w-20">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                      Comp
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="0.1"
+                      className="w-full px-3 py-2 rounded-xl border outline-none"
+                      value={modelForm.length}
+                      onChange={(e) =>
+                        setModelForm({ ...modelForm, length: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="w-24">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                      Peso(kg)
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="0.001"
+                      className="w-full px-3 py-2 rounded-xl border outline-none"
+                      value={modelForm.weight}
+                      onChange={(e) =>
+                        setModelForm({ ...modelForm, weight: e.target.value })
+                      }
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-xl font-bold"
+                  >
+                    Salvar
+                  </button>
+                </form>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
+                    <tr>
+                      <th className="px-6 py-4">Modelo</th>
+                      <th className="px-6 py-4">Dimensões</th>
+                      <th className="px-6 py-4">Peso</th>
+                      <th className="px-6 py-4 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {models.map((m) => (
+                      <tr key={m.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-4 font-bold text-slate-700">
+                          {m.name}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {m.height}x{m.width}x{m.length}cm
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {m.weight}kg
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => handleDeleteModel(m.id)}
+                            className="text-red-500"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {view === "PROD_FORM" && (
             <div className="max-w-2xl mx-auto animate-enter pb-10">
               <button
                 onClick={() => setView("PRODUCTS")}
-                className="mb-4 text-slate-500 hover:text-slate-800 flex items-center gap-2 font-medium"
+                className="mb-4 text-slate-500 flex items-center gap-2"
               >
-                <X size={20} /> Cancelar e voltar
+                <X size={20} /> Cancelar
               </button>
               <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-                <div className="bg-slate-900 p-6 text-white flex justify-between items-center relative overflow-hidden">
-                  <div className="relative z-10">
-                    <h2 className="font-bold text-xl">
-                      {editingId ? "Editar Produto" : "Cadastrar Produto"}
-                    </h2>
-                    <p className="text-slate-400 text-sm mt-1">
-                      Preencha as informações abaixo.
-                    </p>
-                  </div>
-                  <img
-                    src="https://i.imgur.com/Q3oTWj1.png"
-                    className="h-12 opacity-20 absolute right-4 rotate-12"
-                    alt="logo"
-                  />
+                <div className="bg-slate-900 p-6 text-white">
+                  <h2 className="font-bold text-xl">
+                    {editingId ? "Editar" : "Novo"} Produto
+                  </h2>
                 </div>
                 <form onSubmit={handleSaveProd} className="p-8 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 mb-1">
-                        Nome do Produto
-                      </label>
+                  {/* CATEGORIA */}
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex gap-4">
+                    <label
+                      className={`flex-1 p-3 rounded-lg border-2 cursor-pointer text-center font-bold ${
+                        prodCategory === "CACHACA"
+                          ? "border-yellow-500 bg-yellow-50"
+                          : "border-slate-200"
+                      }`}
+                    >
                       <input
-                        required
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:border-yellow-500 outline-none transition-all"
-                        value={prodForm.name}
-                        onChange={(e) =>
-                          setProdForm({ ...prodForm, name: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">
-                        Embalagem
-                      </label>
-                      <select
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white"
-                        value={prodForm.packaging}
-                        onChange={(e) => {
-                          const pkg = e.target.value;
-                          setProdForm({
-                            ...prodForm,
-                            packaging: pkg,
-                            volume: pkg === "Garrafa PET" ? "1L" : "700ml",
-                          });
-                        }}
-                      >
-                        <option>Garrafa PET</option>
-                        <option>Garrafa de Vidro</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1">
-                        Tipo
-                      </label>
-                      <select
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none bg-white"
-                        value={prodForm.type}
-                        onChange={(e) =>
-                          setProdForm({ ...prodForm, type: e.target.value })
-                        }
-                      >
-                        <option>Curtida</option>
-                        <option>Doce</option>
-                      </select>
-                    </div>
-                    <div className="col-span-1 md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+                        type="radio"
+                        className="hidden"
+                        checked={prodCategory === "CACHACA"}
+                        onChange={() => setProdCategory("CACHACA")}
+                      />{" "}
+                      🥃 Cachaça
+                    </label>
+                    <label
+                      className={`flex-1 p-3 rounded-lg border-2 cursor-pointer text-center font-bold ${
+                        prodCategory === "GENERAL"
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        className="hidden"
+                        checked={prodCategory === "GENERAL"}
+                        onChange={() => setProdCategory("GENERAL")}
+                      />{" "}
+                      📦 Outro
+                    </label>
+                  </div>
+
+                  {/* CAMPOS COMUNS */}
+                  <div>
+                    <label className="font-bold text-sm">Nome</label>
+                    <input
+                      required
+                      className="w-full px-4 py-2 border rounded-xl"
+                      value={prodForm.name}
+                      onChange={(e) =>
+                        setProdForm({ ...prodForm, name: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  {/* CACHAÇA ONLY */}
+                  {prodCategory === "CACHACA" && (
+                    <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">
-                          Preço (R$)
-                        </label>
-                        <input
-                          required
-                          type="number"
-                          step="0.01"
-                          onKeyDown={preventNonNumeric}
-                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500"
-                          value={prodForm.price}
+                        <label className="font-bold text-sm">Tipo</label>
+                        <select
+                          className="w-full px-4 py-2 border rounded-xl bg-white"
+                          value={prodForm.type}
                           onChange={(e) =>
-                            setProdForm({ ...prodForm, price: e.target.value })
+                            setProdForm({ ...prodForm, type: e.target.value })
                           }
-                        />
+                        >
+                          <option>Curtida</option>
+                          <option>Doce</option>
+                          <option>Prata</option>
+                          <option>Premium</option>
+                        </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">
-                          Volume
-                        </label>
+                        <label className="font-bold text-sm">Teor (%)</label>
                         <input
-                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none"
-                          value={prodForm.volume}
-                          onChange={(e) =>
-                            setProdForm({ ...prodForm, volume: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">
-                          Teor (%)
-                        </label>
-                        <input
-                          type="number"
-                          onKeyDown={preventNonNumeric}
-                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500"
+                          className="w-full px-4 py-2 border rounded-xl"
                           value={prodForm.abv}
                           onChange={(e) =>
                             setProdForm({ ...prodForm, abv: e.target.value })
@@ -2368,75 +2563,103 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">
-                          Estoque
-                        </label>
+                        <label className="font-bold text-sm">Volume</label>
                         <input
-                          type="number"
-                          onKeyDown={preventNonNumeric}
-                          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500 bg-slate-50"
-                          value={prodForm.stock_quantity}
+                          className="w-full px-4 py-2 border rounded-xl"
+                          value={prodForm.volume}
                           onChange={(e) =>
-                            setProdForm({
-                              ...prodForm,
-                              stock_quantity: e.target.value,
-                            })
+                            setProdForm({ ...prodForm, volume: e.target.value })
                           }
                         />
                       </div>
                     </div>
-                    {/* SEÇÃO "DIMENSÕES PARA FRETE" REMOVIDA AQUI */}
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 mb-1">
-                        URL da Imagem
-                      </label>
-                      <div className="flex flex-col md:flex-row gap-4 items-start">
-                        <input
-                          className="flex-1 w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none focus:border-yellow-500"
-                          value={prodForm.imageUrl}
-                          onChange={(e) =>
-                            setProdForm({
-                              ...prodForm,
-                              imageUrl: e.target.value,
-                            })
-                          }
-                        />
-                        {prodForm.imageUrl && (
-                          <div className="w-40 h-40 shrink-0 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 shadow-sm overflow-hidden">
-                            <img
-                              src={prodForm.imageUrl}
-                              className="w-full h-full object-contain"
-                              alt="Preview"
-                              onError={(e) =>
-                                (e.currentTarget.style.display = "none")
-                              }
-                            />
-                          </div>
-                        )}
+                  )}
+
+                  {/* MODELO DE DIMENSÃO */}
+                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                    <label className="font-bold text-sm text-blue-800">
+                      Modelo de Dimensão (Obrigatório)
+                    </label>
+                    <select
+                      className="w-full px-4 py-2 border border-blue-200 rounded-xl bg-white mt-1"
+                      value={selectedModelId}
+                      onChange={(e) => handleSelectModel(e.target.value)}
+                    >
+                      <option value="">-- Selecione --</option>
+                      {models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.weight}kg)
+                        </option>
+                      ))}
+                    </select>
+                    {prodForm.weight && (
+                      <div className="text-xs text-blue-600 mt-2">
+                        Medidas carregadas: {prodForm.height}x{prodForm.width}x
+                        {prodForm.length}cm - {prodForm.weight}kg
                       </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="font-bold text-sm">Preço</label>
+                      <input
+                        required
+                        type="number"
+                        step="0.01"
+                        className="w-full px-4 py-2 border rounded-xl"
+                        value={prodForm.price}
+                        onChange={(e) =>
+                          setProdForm({ ...prodForm, price: e.target.value })
+                        }
+                      />
                     </div>
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="block text-sm font-bold text-slate-700 mb-1">
-                        Descrição
-                      </label>
-                      <textarea
-                        rows={4}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-xl outline-none resize-none focus:border-yellow-500"
-                        value={prodForm.description}
+                    <div>
+                      <label className="font-bold text-sm">Estoque</label>
+                      <input
+                        type="number"
+                        className="w-full px-4 py-2 border rounded-xl"
+                        value={prodForm.stock_quantity}
                         onChange={(e) =>
                           setProdForm({
                             ...prodForm,
-                            description: e.target.value,
+                            stock_quantity: e.target.value,
                           })
                         }
                       />
                     </div>
                   </div>
+
+                  <div>
+                    <label className="font-bold text-sm">Imagem URL</label>
+                    <input
+                      className="w-full px-4 py-2 border rounded-xl"
+                      value={prodForm.imageUrl}
+                      onChange={(e) =>
+                        setProdForm({ ...prodForm, imageUrl: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-sm">Descrição</label>
+                    <textarea
+                      rows={3}
+                      className="w-full px-4 py-2 border rounded-xl"
+                      value={prodForm.description}
+                      onChange={(e) =>
+                        setProdForm({
+                          ...prodForm,
+                          description: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
                   <button
                     type="submit"
-                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-yellow-500 py-3 rounded-xl font-bold shadow-lg"
                   >
-                    <Save size={20} /> Salvar e Fechar
+                    Salvar Produto
                   </button>
                 </form>
               </div>
