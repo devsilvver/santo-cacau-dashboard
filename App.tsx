@@ -438,8 +438,13 @@ export default function App() {
         <div className="absolute top-0 right-0 w-32 h-32 bg-[#B58E38] opacity-10 rounded-bl-full pointer-events-none" />
         <div className="p-8 flex flex-col items-center border-b border-white/10 relative z-10">
           <div className="bg-white p-2 rounded-full mb-4 shadow-lg shadow-white/5">
-            <div className="w-16 h-16 bg-[#F5F2EB] rounded-full flex items-center justify-center text-[#2A1610] font-serif font-bold text-xl">
-              SC
+            {/* Substitua o bloco abaixo no seu App.tsx */}
+            <div className="bg-white p-2 rounded-full mb-4 shadow-lg shadow-white/5">
+              <img
+                src="/logo santo cacau.png"
+                alt="Logo"
+                className="w-16 h-16 rounded-full object-cover"
+              />
             </div>
           </div>
           <h1 className="text-xl font-serif italic text-[#B58E38] tracking-tight">
