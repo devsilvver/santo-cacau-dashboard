@@ -75,7 +75,7 @@ interface Toast {
   type: "success" | "error" | "warning";
 }
 
-const CATEGORIES = ["Brigadeiros", "Bolos", "Brownies", "Combos"];
+const CATEGORIES = ["Brigadeiros", "Bolos", "Caixinhas", "Caixinhas Temáticas", "Combos"];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
