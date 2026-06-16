@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   LayoutDashboard,
   PlusCircle,
@@ -22,6 +22,10 @@ import {
   ChevronDown,
   CheckCircle2,
   XCircle,
+  Wallet,
+  TrendingUp,
+  DollarSign,
+  Receipt,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -110,7 +114,9 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [view, setView] = useState<"PRODUCTS" | "PROD_FORM" | "SALES">("SALES");
+  const [view, setView] = useState<
+    "PRODUCTS" | "PROD_FORM" | "SALES" | "FINANCE"
+  >("SALES");
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
@@ -274,7 +280,11 @@ export default function App() {
   };
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (!confirm("Tem certeza que deseja excluir o histórico deste pedido?"))
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir o histórico deste pedido? Ele será removido do financeiro.",
+      )
+    )
       return;
     try {
       await deleteDoc(doc(db, "orders", orderId));
@@ -333,6 +343,28 @@ export default function App() {
         return "bg-gray-100 text-gray-600 border-gray-200";
     }
   };
+
+  // ==========================================
+  // CÁLCULOS FINANCEIROS
+  // ==========================================
+  const financialStats = useMemo(() => {
+    const completedOrders = orders.filter((o) => o.status === "Concluído");
+    const pendingOrders = orders.filter((o) => o.status === "Pendente");
+    const canceledOrders = orders.filter((o) => o.status === "Cancelado");
+
+    const totalRevenue = completedOrders.reduce((acc, o) => acc + o.total, 0);
+    const totalPending = pendingOrders.reduce((acc, o) => acc + o.total, 0);
+    const ticketMedio =
+      completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0;
+
+    return {
+      revenue: totalRevenue,
+      pending: totalPending,
+      salesCount: completedOrders.length,
+      ticket: ticketMedio,
+      canceledCount: canceledOrders.length,
+    };
+  }, [orders]);
 
   if (authLoading)
     return (
@@ -428,6 +460,12 @@ export default function App() {
             )}
           </button>
           <button
+            onClick={() => setView("FINANCE")}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 ${view === "FINANCE" ? "bg-[#B58E38] text-white font-bold shadow-lg" : "text-white/60 hover:bg-white/5 hover:text-white"}`}
+          >
+            <Wallet size={20} /> Gestão Financeira
+          </button>
+          <button
             onClick={() => setView("PRODUCTS")}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 ${view === "PRODUCTS" ? "bg-[#B58E38] text-white font-bold shadow-lg" : "text-white/60 hover:bg-white/5 hover:text-white"}`}
           >
@@ -467,6 +505,132 @@ export default function App() {
         )}
 
         <div className="p-8 max-w-6xl mx-auto min-h-full">
+          {/* VIEW: FINANCEIRO */}
+          {view === "FINANCE" && (
+            <div className="animate-enter pb-10">
+              <div className="mb-8">
+                <h2 className="text-3xl font-serif text-[#2A1610] italic">
+                  Gestão Financeira
+                </h2>
+                <p className="text-[#2A1610]/60 mt-1 text-sm">
+                  Acompanhe o faturamento e os indicadores da sua loja.
+                </p>
+              </div>
+
+              {/* Cards de Métricas */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-green-100 text-green-700 rounded-xl">
+                      <DollarSign size={20} />
+                    </div>
+                    <span className="text-sm font-bold uppercase tracking-widest text-[#2A1610]/50">
+                      Faturamento
+                    </span>
+                  </div>
+                  <span className="text-3xl font-serif font-bold text-[#2A1610]">
+                    {formatMoney(financialStats.revenue)}
+                  </span>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
+                      <TrendingUp size={20} />
+                    </div>
+                    <span className="text-sm font-bold uppercase tracking-widest text-[#2A1610]/50">
+                      Vendas
+                    </span>
+                  </div>
+                  <span className="text-3xl font-serif font-bold text-[#2A1610]">
+                    {financialStats.salesCount}{" "}
+                    <span className="text-sm font-sans text-[#2A1610]/50">
+                      concluídas
+                    </span>
+                  </span>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+                      <Receipt size={20} />
+                    </div>
+                    <span className="text-sm font-bold uppercase tracking-widest text-[#2A1610]/50">
+                      Ticket Médio
+                    </span>
+                  </div>
+                  <span className="text-3xl font-serif font-bold text-[#2A1610]">
+                    {formatMoney(financialStats.ticket)}
+                  </span>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-yellow-100 text-yellow-700 rounded-xl">
+                      <Clock size={20} />
+                    </div>
+                    <span className="text-sm font-bold uppercase tracking-widest text-[#2A1610]/50">
+                      A Receber
+                    </span>
+                  </div>
+                  <span className="text-3xl font-serif font-bold text-[#2A1610]">
+                    {formatMoney(financialStats.pending)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tabela de Transações Recentes */}
+              <div className="bg-white rounded-3xl shadow-sm border border-[#B58E38]/20 overflow-hidden">
+                <div className="p-6 bg-[#F5F2EB] border-b border-[#B58E38]/10">
+                  <h3 className="font-serif italic text-xl text-[#2A1610]">
+                    Últimas Vendas Concluídas
+                  </h3>
+                </div>
+                <table className="w-full text-left">
+                  <thead className="bg-white text-[#2A1610]/50 text-xs uppercase font-bold tracking-widest border-b border-[#B58E38]/10">
+                    <tr>
+                      <th className="px-6 py-5">Data</th>
+                      <th className="px-6 py-5">Cliente</th>
+                      <th className="px-6 py-5 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#B58E38]/10">
+                    {orders
+                      .filter((o) => o.status === "Concluído")
+                      .slice(0, 10)
+                      .map((o) => (
+                        <tr
+                          key={o.id}
+                          className="hover:bg-[#F5F2EB]/50 transition-colors"
+                        >
+                          <td className="px-6 py-4 text-sm text-[#2A1610]/70">
+                            {formatDate(o.createdAt)}
+                          </td>
+                          <td className="px-6 py-4 font-bold text-[#2A1610]">
+                            {o.customerName}
+                          </td>
+                          <td className="px-6 py-4 text-right font-bold text-green-700">
+                            {formatMoney(o.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    {orders.filter((o) => o.status === "Concluído").length ===
+                      0 && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="p-10 text-center text-[#2A1610]/40 font-serif italic text-lg"
+                        >
+                          Nenhuma venda concluída ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* VIEW: VENDAS (PEDIDOS) */}
           {view === "SALES" && (
             <div className="animate-enter pb-10">
@@ -575,6 +739,7 @@ export default function App() {
                                 <button
                                   onClick={() => handleDeleteOrder(o.id)}
                                   className="px-4 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl transition-colors"
+                                  title="Apagar Pedido"
                                 >
                                   <Trash2 size={18} />
                                 </button>
@@ -623,7 +788,7 @@ export default function App() {
             </div>
           )}
 
-          {/* VIEW: PRODUTOS (MANTIDO EXATAMENTE IGUAL) */}
+          {/* VIEW: PRODUTOS */}
           {view === "PRODUCTS" && (
             <div className="animate-enter">
               <div className="flex justify-between items-center mb-8">
@@ -754,7 +919,7 @@ export default function App() {
             </div>
           )}
 
-          {/* VIEW: FORMULÁRIO (MANTIDO) */}
+          {/* VIEW: FORMULÁRIO DE PRODUTO */}
           {view === "PROD_FORM" && (
             <div className="max-w-2xl mx-auto animate-enter">
               <button
