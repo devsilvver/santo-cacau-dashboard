@@ -66,6 +66,7 @@ const googleProvider = new GoogleAuthProvider();
 // ==========================================
 const ALLOWED_EMAILS = [
   "guilhermesilvestrini1@gmail.com", // <-- ALTERE PARA O SEU E-MAIL
+  "mandam.moraisdeoliveira@gmail.com ", // Adicione o novo e-mail aqui
 ];
 
 interface Product {
