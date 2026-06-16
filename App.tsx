@@ -56,7 +56,7 @@ const googleProvider = new GoogleAuthProvider();
 // EMAILS PERMITIDOS (COLOQUE O SEU AQUI)
 // ==========================================
 const ALLOWED_EMAILS = [
-  "seu_email@gmail.com", // <-- ALTERE PARA O SEU E-MAIL DO GOOGLE
+  "guilhermesilvestrini1@gmail.com", // <-- ALTERE PARA O SEU E-MAIL DO GOOGLE
 ];
 
 interface Product {
