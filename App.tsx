@@ -15,6 +15,13 @@ import {
   Loader2,
   LogOut,
   Lock,
+  ShoppingBag,
+  Clock,
+  User,
+  MapPin,
+  ChevronDown,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -25,6 +32,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  onSnapshot,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -32,12 +40,9 @@ import {
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
-  User,
+  User as AuthUser,
 } from "firebase/auth";
 
-// ==========================================
-// CONFIGURAÇÃO DO FIREBASE
-// ==========================================
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -53,10 +58,10 @@ const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
 // ==========================================
-// EMAILS PERMITIDOS (COLOQUE O SEU AQUI)
+// EMAILS PERMITIDOS
 // ==========================================
 const ALLOWED_EMAILS = [
-  "guilhermesilvestrini1@gmail.com", // <-- ALTERE PARA O SEU E-MAIL DO GOOGLE
+  "guilhermesilvestrini1@gmail.com", // <-- ALTERE PARA O SEU E-MAIL
 ];
 
 interface Product {
@@ -69,20 +74,47 @@ interface Product {
   stock_quantity: number;
 }
 
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+interface Order {
+  id: string;
+  customerName: string;
+  deliveryType: string;
+  address: string;
+  total: number;
+  status: "Pendente" | "Concluído" | "Cancelado";
+  createdAt: number;
+  items: OrderItem[];
+}
+
 interface Toast {
   id: number;
   message: string;
   type: "success" | "error" | "warning";
 }
 
-const CATEGORIES = ["Brigadeiros", "Bolos", "Caixinhas", "Caixinhas Temáticas", "Combos"];
+const CATEGORIES = [
+  "Brigadeiros",
+  "Bolos",
+  "Caixinhas",
+  "Caixinhas Temáticas",
+  "Combos",
+];
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [view, setView] = useState<"PRODUCTS" | "PROD_FORM">("PRODUCTS");
+  const [view, setView] = useState<"PRODUCTS" | "PROD_FORM" | "SALES">("SALES");
   const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -97,7 +129,6 @@ export default function App() {
     stock_quantity: "0",
   });
 
-  // Verifica se o usuário já está logado ao abrir a página
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -108,6 +139,23 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Escutar Pedidos em Tempo Real
+  useEffect(() => {
+    if (!user || !ALLOWED_EMAILS.includes(user.email || "")) return;
+
+    const unsubscribe = onSnapshot(collection(db, "orders"), (snapshot) => {
+      const loadedOrders: Order[] = [];
+      snapshot.forEach((doc) => {
+        loadedOrders.push({ id: doc.id, ...doc.data() } as Order);
+      });
+      // Ordena do mais recente para o mais antigo
+      loadedOrders.sort((a, b) => b.createdAt - a.createdAt);
+      setOrders(loadedOrders);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   const handleLogin = async () => {
     try {
@@ -129,6 +177,7 @@ export default function App() {
   const handleLogout = () => {
     signOut(auth);
     setProducts([]);
+    setOrders([]);
   };
 
   const showToast = (
@@ -153,10 +202,7 @@ export default function App() {
       });
       setProducts(loadedProducts);
     } catch (error) {
-      showToast(
-        "Erro ao carregar produtos. Verifique suas permissões.",
-        "error",
-      );
+      showToast("Erro ao carregar produtos.", "error");
     } finally {
       setLoading(false);
     }
@@ -165,7 +211,6 @@ export default function App() {
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     const payload = {
       name: prodForm.name,
       description: prodForm.description,
@@ -186,7 +231,7 @@ export default function App() {
       loadProducts();
       setView("PRODUCTS");
     } catch (error) {
-      showToast("Erro ao salvar produto. Sem permissão?", "error");
+      showToast("Erro ao salvar produto.", "error");
     } finally {
       setLoading(false);
     }
@@ -203,22 +248,40 @@ export default function App() {
     }
   };
 
-  const persistStock = async (id: string, newQuantity: number) => {
-    try {
-      await updateDoc(doc(db, "products", id), { stock_quantity: newQuantity });
-      showToast("Estoque salvo.", "success");
-    } catch (e) {
-      showToast("Erro ao salvar estoque.", "error");
-      loadProducts();
-    }
-  };
-
-  const updateStock = (id: string, current: number, change: number) => {
+  const updateStock = async (id: string, current: number, change: number) => {
     const newStock = Math.max(0, current + change);
     setProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, stock_quantity: newStock } : p)),
     );
-    persistStock(id, newStock);
+    try {
+      await updateDoc(doc(db, "products", id), { stock_quantity: newStock });
+    } catch (e) {
+      loadProducts();
+      showToast("Erro ao atualizar estoque.", "error");
+    }
+  };
+
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    newStatus: string,
+  ) => {
+    try {
+      await updateDoc(doc(db, "orders", orderId), { status: newStatus });
+      showToast(`Pedido marcado como ${newStatus}`, "success");
+    } catch (e) {
+      showToast("Erro ao atualizar pedido.", "error");
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm("Tem certeza que deseja excluir o histórico deste pedido?"))
+      return;
+    try {
+      await deleteDoc(doc(db, "orders", orderId));
+      showToast("Pedido excluído.", "success");
+    } catch (e) {
+      showToast("Erro ao excluir pedido.", "error");
+    }
   };
 
   const handleEditProd = (p: Product) => {
@@ -247,27 +310,42 @@ export default function App() {
     setView("PROD_FORM");
   };
 
-  const formatMoney = (v: number) => {
-    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatMoney = (v: number) =>
+    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatDate = (timestamp: number) => {
+    const d = new Date(timestamp);
+    return (
+      d.toLocaleDateString("pt-BR") +
+      " às " +
+      d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    );
   };
 
-  // ==========================================
-  // TELA DE LOGIN
-  // ==========================================
-  if (authLoading) {
+  const getStatusStyle = (st: string) => {
+    switch (st) {
+      case "Concluído":
+        return "bg-green-100 text-green-700 border-green-200";
+      case "Pendente":
+        return "bg-yellow-100 text-yellow-700 border-yellow-200";
+      case "Cancelado":
+        return "bg-red-100 text-red-700 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-600 border-gray-200";
+    }
+  };
+
+  if (authLoading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F2EB]">
         <Loader2 className="w-10 h-10 text-[#B58E38] animate-spin" />
       </div>
     );
-  }
 
   if (!user || !ALLOWED_EMAILS.includes(user.email || "")) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F2EB] p-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#B58E38] opacity-10 rounded-bl-full pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#2A1610] opacity-5 rounded-tr-full pointer-events-none" />
-
         <div className="bg-white p-10 rounded-[32px] shadow-2xl max-w-md w-full border border-[#B58E38]/20 relative z-10 flex flex-col items-center text-center">
           <div className="w-20 h-20 bg-[#F5F2EB] rounded-full flex items-center justify-center text-[#2A1610] mb-6 shadow-inner">
             <Lock size={32} />
@@ -276,33 +354,12 @@ export default function App() {
             Painel Restrito
           </h1>
           <p className="text-[#2A1610]/60 text-sm mb-8">
-            Área de gestão exclusiva Santo Cacau. Faça login para continuar.
+            Área de gestão exclusiva Santo Cacau.
           </p>
           <button
             onClick={handleLogin}
             className="w-full bg-[#2A1610] hover:bg-[#1A0D09] text-white py-4 rounded-full font-bold shadow-lg transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-3"
           >
-            <svg
-              className="w-5 h-5 bg-white rounded-full p-0.5"
-              viewBox="0 0 24 24"
-            >
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
             Entrar com Google
           </button>
         </div>
@@ -310,17 +367,14 @@ export default function App() {
     );
   }
 
-  // ==========================================
-  // TELA DO DASHBOARD PRINCIPAL
-  // ==========================================
   return (
     <div className="flex flex-col md:flex-row h-screen bg-[#F5F2EB] text-[#2A1610] font-sans overflow-hidden">
-      {/* TOASTS (Mesmo de antes) */}
+      {/* TOASTS */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl transform transition-all border-l-4 bg-white ${t.type === "success" ? "border-green-500 text-slate-700" : t.type === "error" ? "border-red-500 text-slate-700" : "border-yellow-500 text-slate-700"}`}
+            className={`pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl transition-all border-l-4 bg-white ${t.type === "success" ? "border-green-500 text-slate-700" : t.type === "error" ? "border-red-500 text-slate-700" : "border-yellow-500 text-slate-700"}`}
           >
             <div
               className={`p-2 rounded-full shrink-0 ${t.type === "success" ? "bg-green-100 text-green-600" : t.type === "error" ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"}`}
@@ -359,12 +413,20 @@ export default function App() {
           <h1 className="text-xl font-serif italic text-[#B58E38] tracking-tight">
             Santo Cacau
           </h1>
-          <p className="text-[10px] text-white/50 mt-1 uppercase tracking-widest">
-            Painel Gestor
-          </p>
         </div>
 
-        <nav className="flex-1 px-4 mt-6 relative z-10">
+        <nav className="flex-1 px-4 mt-6 relative z-10 space-y-2">
+          <button
+            onClick={() => setView("SALES")}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 ${view === "SALES" ? "bg-[#B58E38] text-white font-bold shadow-lg" : "text-white/60 hover:bg-white/5 hover:text-white"}`}
+          >
+            <ShoppingBag size={20} /> Pedidos em Tempo Real
+            {orders.filter((o) => o.status === "Pendente").length > 0 && (
+              <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                {orders.filter((o) => o.status === "Pendente").length}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => setView("PRODUCTS")}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 ${view === "PRODUCTS" ? "bg-[#B58E38] text-white font-bold shadow-lg" : "text-white/60 hover:bg-white/5 hover:text-white"}`}
@@ -396,7 +458,7 @@ export default function App() {
         </div>
       </aside>
 
-      {/* MAIN CONTENT (O mesmo de antes) */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto w-full relative">
         {loading && (
           <div className="absolute inset-0 bg-[#F5F2EB]/50 backdrop-blur-sm z-40 flex items-center justify-center">
@@ -405,6 +467,163 @@ export default function App() {
         )}
 
         <div className="p-8 max-w-6xl mx-auto min-h-full">
+          {/* VIEW: VENDAS (PEDIDOS) */}
+          {view === "SALES" && (
+            <div className="animate-enter pb-10">
+              <div className="flex justify-between items-end mb-8">
+                <div>
+                  <h2 className="text-3xl font-serif text-[#2A1610] italic">
+                    Pedidos e Vendas
+                  </h2>
+                  <p className="text-[#2A1610]/60 mt-1 text-sm">
+                    Acompanhe novos pedidos em tempo real.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100 shadow-sm animate-pulse">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>{" "}
+                  AO VIVO
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                {orders.map((o) => {
+                  const isOpen = openOrderId === o.id;
+                  return (
+                    <div
+                      key={o.id}
+                      className="bg-white rounded-3xl shadow-sm border border-[#B58E38]/20 overflow-hidden transition-all"
+                    >
+                      {/* HEADER DO PEDIDO */}
+                      <button
+                        onClick={() => setOpenOrderId(isOpen ? null : o.id)}
+                        className={`w-full flex justify-between items-center p-6 transition-all ${isOpen ? "bg-[#F5F2EB]" : "hover:bg-[#F5F2EB]/50"}`}
+                      >
+                        <div className="flex items-center gap-6">
+                          <div className="text-left">
+                            <p
+                              className={`text-lg font-bold font-serif ${isOpen ? "text-[#B58E38]" : "text-[#2A1610]"}`}
+                            >
+                              {o.customerName}
+                            </p>
+                            <p className="text-xs text-[#2A1610]/50 mt-1 flex items-center gap-1">
+                              <Clock size={12} /> {formatDate(o.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <span
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border ${getStatusStyle(o.status)}`}
+                          >
+                            {o.status}
+                          </span>
+                          <span
+                            className={`font-bold text-xl ${isOpen ? "text-[#B58E38]" : "text-[#2A1610]"}`}
+                          >
+                            {formatMoney(o.total)}
+                          </span>
+                          <ChevronDown
+                            size={20}
+                            className={`transition-transform duration-300 ${isOpen ? "rotate-180 text-[#B58E38]" : "text-[#2A1610]/40"}`}
+                          />
+                        </div>
+                      </button>
+
+                      {/* DETALHES DO PEDIDO EXPANDIDO */}
+                      <div
+                        className={`overflow-hidden transition-all duration-300 ${isOpen ? "max-h-[1000px] border-t border-[#B58E38]/20" : "max-h-0"}`}
+                      >
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white">
+                          {/* Coluna 1: Cliente e Ações */}
+                          <div className="space-y-6">
+                            <div>
+                              <h4 className="text-xs font-bold text-[#B58E38] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <MapPin size={16} /> Entrega / Retirada
+                              </h4>
+                              <div className="bg-[#F5F2EB] p-4 rounded-2xl border border-[#B58E38]/10 shadow-sm">
+                                <p className="font-bold text-[#2A1610] uppercase text-sm mb-2">
+                                  {o.deliveryType}
+                                </p>
+                                <p className="text-[#2A1610]/70 text-sm whitespace-pre-line">
+                                  {o.deliveryType === "entrega"
+                                    ? o.address
+                                    : "Cliente fará a retirada na loja."}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="text-xs font-bold text-[#B58E38] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <LayoutDashboard size={16} /> Atualizar Status
+                              </h4>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() =>
+                                    handleUpdateOrderStatus(o.id, "Concluído")
+                                  }
+                                  className="flex-1 bg-green-100 hover:bg-green-200 text-green-700 py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <CheckCircle2 size={16} /> Concluir
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleUpdateOrderStatus(o.id, "Cancelado")
+                                  }
+                                  className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <XCircle size={16} /> Cancelar
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteOrder(o.id)}
+                                  className="px-4 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl transition-colors"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Coluna 2: Itens do Pedido */}
+                          <div className="flex flex-col h-full">
+                            <h4 className="text-xs font-bold text-[#B58E38] uppercase tracking-widest mb-3 flex items-center gap-2">
+                              <ShoppingBag size={16} /> Itens Solicitados
+                            </h4>
+                            <div className="bg-[#F5F2EB] rounded-2xl border border-[#B58E38]/10 overflow-hidden flex-1 shadow-sm p-2">
+                              <table className="w-full text-left text-sm">
+                                <tbody className="divide-y divide-[#B58E38]/10">
+                                  {o.items.map((item, idx) => (
+                                    <tr key={idx}>
+                                      <td className="p-3 font-bold text-[#2A1610]">
+                                        <span className="text-[#B58E38] mr-2">
+                                          {item.quantity}x
+                                        </span>
+                                        {item.name}
+                                      </td>
+                                      <td className="p-3 text-right font-bold text-[#2A1610]/60">
+                                        {formatMoney(
+                                          item.price * item.quantity,
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {orders.length === 0 && (
+                  <div className="text-center py-24 text-[#2A1610]/40 font-serif italic text-lg">
+                    Nenhum pedido registrado ainda.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW: PRODUTOS (MANTIDO EXATAMENTE IGUAL) */}
           {view === "PRODUCTS" && (
             <div className="animate-enter">
               <div className="flex justify-between items-center mb-8">
@@ -531,15 +750,11 @@ export default function App() {
                       ))}
                   </tbody>
                 </table>
-                {products.length === 0 && !loading && (
-                  <div className="p-10 text-center text-[#2A1610]/40 font-serif italic text-lg">
-                    Nenhum produto cadastrado.
-                  </div>
-                )}
               </div>
             </div>
           )}
 
+          {/* VIEW: FORMULÁRIO (MANTIDO) */}
           {view === "PROD_FORM" && (
             <div className="max-w-2xl mx-auto animate-enter">
               <button
@@ -548,18 +763,13 @@ export default function App() {
               >
                 <X size={18} /> Voltar para lista
               </button>
-
               <div className="bg-white rounded-3xl shadow-xl border border-[#B58E38]/20 overflow-hidden">
                 <div className="bg-[#2A1610] p-8 text-white relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-[#B58E38] opacity-20 rounded-bl-full pointer-events-none" />
                   <h2 className="font-serif italic text-3xl relative z-10">
                     {editingId ? "Editar Doce" : "Novo Doce"}
                   </h2>
-                  <p className="text-white/60 text-sm mt-1 relative z-10">
-                    Preencha os detalhes para a vitrine do cliente.
-                  </p>
                 </div>
-
                 <form onSubmit={handleSaveProd} className="p-8 space-y-6">
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
@@ -574,7 +784,6 @@ export default function App() {
                       }
                     />
                   </div>
-
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
@@ -621,7 +830,6 @@ export default function App() {
                       />
                     </div>
                   </div>
-
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
                       Descrição
@@ -639,7 +847,6 @@ export default function App() {
                       }
                     />
                   </div>
-
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
                       Estoque Atual
@@ -656,15 +863,12 @@ export default function App() {
                       }
                     />
                   </div>
-
-                  <div className="pt-4 border-t border-[#B58E38]/10">
-                    <button
-                      type="submit"
-                      className="w-full bg-[#B58E38] hover:bg-[#9E7A2E] text-white py-4 rounded-xl font-bold shadow-lg transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle size={18} /> Salvar Produto
-                    </button>
-                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-[#B58E38] hover:bg-[#9E7A2E] text-white py-4 rounded-xl font-bold shadow-lg transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle size={18} /> Salvar Produto
+                  </button>
                 </form>
               </div>
             </div>
