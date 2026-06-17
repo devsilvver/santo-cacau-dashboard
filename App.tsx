@@ -10,8 +10,6 @@ import {
   Info,
   Package,
   Search,
-  Minus,
-  Plus,
   Loader2,
   LogOut,
   Lock,
@@ -65,8 +63,8 @@ const googleProvider = new GoogleAuthProvider();
 // EMAILS PERMITIDOS
 // ==========================================
 const ALLOWED_EMAILS = [
-  "guilhermesilvestrini1@gmail.com", // <-- ALTERE PARA O SEU E-MAIL
-  "mandam.moraisdeoliveira@gmail.com ", // Adicione o novo e-mail aqui
+  "guilhermesilvestrini1@gmail.com",
+  "mandam.moraisdeoliveira@gmail.com",
 ];
 
 interface Product {
@@ -75,8 +73,8 @@ interface Product {
   description: string;
   price: number;
   category: string;
-  emoji: string;
-  stock_quantity: number;
+  imageUrl?: string;
+  emoji?: string; // Mantido para compatibilidade com os antigos
 }
 
 interface OrderItem {
@@ -132,8 +130,7 @@ export default function App() {
     description: "",
     price: "",
     category: "Brigadeiros",
-    emoji: "🍫",
-    stock_quantity: "0",
+    imageUrl: "",
   });
 
   useEffect(() => {
@@ -147,20 +144,16 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Escutar Pedidos em Tempo Real
   useEffect(() => {
     if (!user || !ALLOWED_EMAILS.includes(user.email || "")) return;
-
     const unsubscribe = onSnapshot(collection(db, "orders"), (snapshot) => {
       const loadedOrders: Order[] = [];
       snapshot.forEach((doc) => {
         loadedOrders.push({ id: doc.id, ...doc.data() } as Order);
       });
-      // Ordena do mais recente para o mais antigo
       loadedOrders.sort((a, b) => b.createdAt - a.createdAt);
       setOrders(loadedOrders);
     });
-
     return () => unsubscribe();
   }, [user]);
 
@@ -223,8 +216,7 @@ export default function App() {
       description: prodForm.description,
       price: parseFloat(String(prodForm.price).replace(",", ".")),
       category: prodForm.category,
-      emoji: prodForm.emoji,
-      stock_quantity: parseInt(prodForm.stock_quantity) || 0,
+      imageUrl: prodForm.imageUrl,
     };
 
     try {
@@ -252,19 +244,6 @@ export default function App() {
       loadProducts();
     } catch (error) {
       showToast("Erro ao excluir produto.", "error");
-    }
-  };
-
-  const updateStock = async (id: string, current: number, change: number) => {
-    const newStock = Math.max(0, current + change);
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, stock_quantity: newStock } : p)),
-    );
-    try {
-      await updateDoc(doc(db, "products", id), { stock_quantity: newStock });
-    } catch (e) {
-      loadProducts();
-      showToast("Erro ao atualizar estoque.", "error");
     }
   };
 
@@ -302,8 +281,7 @@ export default function App() {
       description: p.description,
       price: String(p.price),
       category: p.category,
-      emoji: p.emoji,
-      stock_quantity: String(p.stock_quantity),
+      imageUrl: p.imageUrl || "", // Pega a imagem se tiver
     });
     setView("PROD_FORM");
   };
@@ -315,8 +293,7 @@ export default function App() {
       description: "",
       price: "",
       category: "Brigadeiros",
-      emoji: "✨",
-      stock_quantity: "0",
+      imageUrl: "",
     });
     setView("PROD_FORM");
   };
@@ -345,9 +322,6 @@ export default function App() {
     }
   };
 
-  // ==========================================
-  // CÁLCULOS FINANCEIROS
-  // ==========================================
   const financialStats = useMemo(() => {
     const completedOrders = orders.filter((o) => o.status === "Concluído");
     const pendingOrders = orders.filter((o) => o.status === "Pendente");
@@ -471,7 +445,7 @@ export default function App() {
             onClick={() => setView("PRODUCTS")}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 ${view === "PRODUCTS" ? "bg-[#B58E38] text-white font-bold shadow-lg" : "text-white/60 hover:bg-white/5 hover:text-white"}`}
           >
-            <Package size={20} /> Controle de Estoque
+            <Package size={20} /> Catálogo
           </button>
         </nav>
 
@@ -519,7 +493,6 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Cards de Métricas */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
                   <div className="flex items-center gap-3 mb-2">
@@ -534,7 +507,6 @@ export default function App() {
                     {formatMoney(financialStats.revenue)}
                   </span>
                 </div>
-
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
@@ -551,7 +523,6 @@ export default function App() {
                     </span>
                   </span>
                 </div>
-
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
@@ -565,7 +536,6 @@ export default function App() {
                     {formatMoney(financialStats.ticket)}
                   </span>
                 </div>
-
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-[#B58E38]/20 flex flex-col justify-center">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-yellow-100 text-yellow-700 rounded-xl">
@@ -581,7 +551,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tabela de Transações Recentes */}
               <div className="bg-white rounded-3xl shadow-sm border border-[#B58E38]/20 overflow-hidden">
                 <div className="p-6 bg-[#F5F2EB] border-b border-[#B58E38]/10">
                   <h3 className="font-serif italic text-xl text-[#2A1610]">
@@ -639,7 +608,7 @@ export default function App() {
               <div className="flex justify-between items-end mb-8">
                 <div>
                   <h2 className="text-3xl font-serif text-[#2A1610] italic">
-                    Pedidos e Vendas
+                    Pedidos e Encomendas
                   </h2>
                   <p className="text-[#2A1610]/60 mt-1 text-sm">
                     Acompanhe novos pedidos em tempo real.
@@ -659,7 +628,6 @@ export default function App() {
                       key={o.id}
                       className="bg-white rounded-3xl shadow-sm border border-[#B58E38]/20 overflow-hidden transition-all"
                     >
-                      {/* HEADER DO PEDIDO */}
                       <button
                         onClick={() => setOpenOrderId(isOpen ? null : o.id)}
                         className={`w-full flex justify-between items-center p-6 transition-all ${isOpen ? "bg-[#F5F2EB]" : "hover:bg-[#F5F2EB]/50"}`}
@@ -694,12 +662,10 @@ export default function App() {
                         </div>
                       </button>
 
-                      {/* DETALHES DO PEDIDO EXPANDIDO */}
                       <div
                         className={`overflow-hidden transition-all duration-300 ${isOpen ? "max-h-[1000px] border-t border-[#B58E38]/20" : "max-h-0"}`}
                       >
                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white">
-                          {/* Coluna 1: Cliente e Ações */}
                           <div className="space-y-6">
                             <div>
                               <h4 className="text-xs font-bold text-[#B58E38] uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -716,7 +682,6 @@ export default function App() {
                                 </p>
                               </div>
                             </div>
-
                             <div>
                               <h4 className="text-xs font-bold text-[#B58E38] uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <LayoutDashboard size={16} /> Atualizar Status
@@ -748,8 +713,6 @@ export default function App() {
                               </div>
                             </div>
                           </div>
-
-                          {/* Coluna 2: Itens do Pedido */}
                           <div className="flex flex-col h-full">
                             <h4 className="text-xs font-bold text-[#B58E38] uppercase tracking-widest mb-3 flex items-center gap-2">
                               <ShoppingBag size={16} /> Itens Solicitados
@@ -796,10 +759,10 @@ export default function App() {
               <div className="flex justify-between items-center mb-8">
                 <div>
                   <h2 className="text-3xl font-serif text-[#2A1610] italic">
-                    Inventário
+                    Catálogo
                   </h2>
                   <p className="text-[#2A1610]/60 mt-1 text-sm">
-                    Controle seus produtos, preços e disponibilidade.
+                    Adicione fotos e preços das suas delícias.
                   </p>
                 </div>
                 <button
@@ -831,7 +794,6 @@ export default function App() {
                   <thead className="bg-white text-[#2A1610]/50 text-xs uppercase font-bold tracking-widest border-b border-[#B58E38]/10">
                     <tr>
                       <th className="px-6 py-5">Produto</th>
-                      <th className="px-6 py-5">Estoque</th>
                       <th className="px-6 py-5">Preço</th>
                       <th className="px-6 py-5 text-right">Ações</th>
                     </tr>
@@ -848,8 +810,18 @@ export default function App() {
                         >
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-[#F5F2EB] rounded-xl flex items-center justify-center text-2xl shadow-inner shrink-0">
-                                {p.emoji}
+                              <div className="w-12 h-12 bg-[#F5F2EB] rounded-xl flex items-center justify-center text-2xl shadow-inner shrink-0 overflow-hidden">
+                                {p.imageUrl ? (
+                                  <img
+                                    src={p.imageUrl}
+                                    alt={p.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-2xl">
+                                    {p.emoji || "📷"}
+                                  </span>
+                                )}
                               </div>
                               <div>
                                 <span className="font-bold text-[#2A1610] block">
@@ -859,39 +831,6 @@ export default function App() {
                                   {p.category}
                                 </span>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-1 bg-white w-fit px-2 py-1 rounded-full border border-[#B58E38]/20 shadow-sm">
-                              <button
-                                onClick={() =>
-                                  updateStock(p.id, p.stock_quantity, -1)
-                                }
-                                className="p-1.5 hover:bg-[#F5F2EB] rounded-full text-[#2A1610]/50 hover:text-red-500 transition-colors"
-                              >
-                                <Minus size={14} />
-                              </button>
-                              <input
-                                type="number"
-                                className="w-10 text-center bg-transparent outline-none font-bold text-sm text-[#2A1610]"
-                                value={p.stock_quantity}
-                                onChange={(e) =>
-                                  updateStock(
-                                    p.id,
-                                    p.stock_quantity,
-                                    parseInt(e.target.value) -
-                                      p.stock_quantity || 0,
-                                  )
-                                }
-                              />
-                              <button
-                                onClick={() =>
-                                  updateStock(p.id, p.stock_quantity, 1)
-                                }
-                                className="p-1.5 hover:bg-[#F5F2EB] rounded-full text-[#2A1610]/50 hover:text-green-600 transition-colors"
-                              >
-                                <Plus size={14} />
-                              </button>
                             </div>
                           </td>
                           <td className="px-6 py-4 font-bold text-[#B58E38] text-lg">
@@ -951,8 +890,8 @@ export default function App() {
                       }
                     />
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                       <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
                         Categoria
                       </label>
@@ -983,19 +922,20 @@ export default function App() {
                         }
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
-                        Emoji
-                      </label>
-                      <input
-                        maxLength={2}
-                        className="w-full px-4 py-3 bg-[#F5F2EB] border border-transparent rounded-xl focus:border-[#B58E38] focus:bg-white outline-none text-[#2A1610] text-center text-xl transition-all"
-                        value={prodForm.emoji}
-                        onChange={(e) =>
-                          setProdForm({ ...prodForm, emoji: e.target.value })
-                        }
-                      />
-                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
+                      URL da Imagem
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="Ex: https://postimages.org/sua-imagem.jpg"
+                      className="w-full px-4 py-3 bg-[#F5F2EB] border border-transparent rounded-xl focus:border-[#B58E38] focus:bg-white outline-none text-[#2A1610] transition-all"
+                      value={prodForm.imageUrl}
+                      onChange={(e) =>
+                        setProdForm({ ...prodForm, imageUrl: e.target.value })
+                      }
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
@@ -1010,22 +950,6 @@ export default function App() {
                         setProdForm({
                           ...prodForm,
                           description: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
-                      Estoque Atual
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full px-4 py-3 bg-[#F5F2EB] border border-transparent rounded-xl focus:border-[#B58E38] focus:bg-white outline-none text-[#2A1610] transition-all"
-                      value={prodForm.stock_quantity}
-                      onChange={(e) =>
-                        setProdForm({
-                          ...prodForm,
-                          stock_quantity: e.target.value,
                         })
                       }
                     />
