@@ -95,6 +95,7 @@ interface Order {
   whatsappEnviado?: boolean;
   createdAt: number;
   items: OrderItem[];
+  paymentMethod?: string;
 }
 
 interface Toast {
@@ -689,6 +690,16 @@ export default function App() {
                                   {o.deliveryType === "entrega"
                                     ? o.address
                                     : "Cliente fará a retirada na loja."}
+                                </p>
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-[#B58E38] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Wallet size={16} /> Pagamento Escolhido
+                              </h4>
+                              <div className="bg-[#F5F2EB] p-4 rounded-2xl border border-[#B58E38]/10 shadow-sm">
+                                <p className="font-bold text-[#2A1610] uppercase text-sm">
+                                  {o.paymentMethod || "PIX"}
                                 </p>
                               </div>
                             </div>
