@@ -24,6 +24,7 @@ import {
   TrendingUp,
   DollarSign,
   Receipt,
+  Phone,
 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import {
@@ -91,6 +92,7 @@ interface Order {
   address: string;
   total: number;
   status: "Pendente" | "Concluído" | "Cancelado";
+  whatsappEnviado?: boolean;
   createdAt: number;
   items: OrderItem[];
 }
@@ -639,6 +641,14 @@ export default function App() {
                             >
                               {o.customerName}
                             </p>
+
+                            {/* NOVO BLOCO: Exibe o número se existir */}
+                            {o.customerPhone && (
+                              <p className="text-xs text-[#2A1610]/70 mt-1 mb-1 flex items-center gap-1 font-mono">
+                                <Phone size={12} /> {o.customerPhone}
+                              </p>
+                            )}
+
                             <p className="text-xs text-[#2A1610]/50 mt-1 flex items-center gap-1">
                               <Clock size={12} /> {formatDate(o.createdAt)}
                             </p>
