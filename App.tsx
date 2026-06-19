@@ -92,7 +92,7 @@ interface Order {
   address: string;
   total: number;
   status: "Pendente" | "Concluído" | "Cancelado";
-  whatsappEnviado?: boolean;
+  whatsappEnviado?: boolean| string;
   createdAt: number;
   items: OrderItem[];
   paymentMethod?: string;
