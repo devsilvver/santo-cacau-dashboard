@@ -36,7 +36,7 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  runTransaction // <-- ADICIONADO PARA O SISTEMA ANTIQUEBRA
+  runTransaction, // <-- ADICIONADO PARA O SISTEMA ANTIQUEBRA
 } from "firebase/firestore";
 import {
   getAuth,
@@ -95,10 +95,13 @@ interface Order {
   address: string;
   total: number;
   status: "Pendente" | "Concluído" | "Cancelado";
-  whatsappEnviado?: boolean| string;
+  whatsappEnviado?: boolean | string;
   createdAt: number;
   items: OrderItem[];
   paymentMethod?: string;
+  needChange?: boolean;
+  changeFor?: number;
+  changeAmount?: number;
 }
 
 interface Toast {
@@ -123,7 +126,7 @@ export default function App() {
   const [view, setView] = useState<
     "PRODUCTS" | "PROD_FORM" | "SALES" | "FINANCE" | "ORDER_FORM"
   >("SALES");
-  
+
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
@@ -300,7 +303,10 @@ export default function App() {
   // ===============================================
   // FUNÇÕES DE PEDIDOS
   // ===============================================
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    newStatus: string,
+  ) => {
     try {
       await updateDoc(doc(db, "orders", orderId), { status: newStatus });
       showToast(`Pedido marcado como ${newStatus}`, "success");
@@ -310,7 +316,12 @@ export default function App() {
   };
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (!confirm("Tem certeza que deseja excluir o histórico deste pedido? Ele será removido do financeiro.")) return;
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir o histórico deste pedido? Ele será removido do financeiro.",
+      )
+    )
+      return;
     try {
       await deleteDoc(doc(db, "orders", orderId));
       showToast("Pedido excluído.", "success");
@@ -324,11 +335,13 @@ export default function App() {
   // ===============================================
   const handleAddManualItem = () => {
     if (!selectedProductId || selectedQuantity < 1) return;
-    const product = products.find(p => p.id === selectedProductId);
+    const product = products.find((p) => p.id === selectedProductId);
     if (!product) return;
 
-    setManualOrderForm(prev => {
-      const existingItemIndex = prev.items.findIndex(i => i.id === selectedProductId);
+    setManualOrderForm((prev) => {
+      const existingItemIndex = prev.items.findIndex(
+        (i) => i.id === selectedProductId,
+      );
       const newItems = [...prev.items];
       if (existingItemIndex >= 0) {
         newItems[existingItemIndex].quantity += selectedQuantity;
@@ -337,7 +350,7 @@ export default function App() {
           id: product.id,
           name: product.name,
           price: product.price,
-          quantity: selectedQuantity
+          quantity: selectedQuantity,
         });
       }
       return { ...prev, items: newItems };
@@ -347,18 +360,21 @@ export default function App() {
   };
 
   const handleRemoveManualItem = (itemId: string) => {
-    setManualOrderForm(prev => ({
+    setManualOrderForm((prev) => ({
       ...prev,
-      items: prev.items.filter(i => i.id !== itemId)
+      items: prev.items.filter((i) => i.id !== itemId),
     }));
   };
 
   const handleSaveManualOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!manualOrderForm.customerName) return showToast("Nome é obrigatório!", "error");
-    if (!manualOrderForm.deliveryDate) return showToast("Data é obrigatória!", "error");
-    if (manualOrderForm.items.length === 0) return showToast("Adicione ao menos um doce!", "error");
+    if (!manualOrderForm.customerName)
+      return showToast("Nome é obrigatório!", "error");
+    if (!manualOrderForm.deliveryDate)
+      return showToast("Data é obrigatória!", "error");
+    if (manualOrderForm.items.length === 0)
+      return showToast("Adicione ao menos um doce!", "error");
 
     setLoading(true);
 
@@ -367,14 +383,20 @@ export default function App() {
       const [year, month, day] = manualOrderForm.deliveryDate.split("-");
       const formattedDate = `${day}/${month}/${year}`;
 
-      const total = manualOrderForm.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+      const total = manualOrderForm.items.reduce(
+        (acc, item) => acc + item.price * item.quantity,
+        0,
+      );
 
       const orderData = {
         customerName: manualOrderForm.customerName,
         customerPhone: rawPhone,
         deliveryType: manualOrderForm.deliveryType,
         paymentMethod: manualOrderForm.paymentMethod,
-        address: manualOrderForm.deliveryType === "entrega" ? manualOrderForm.address : "Retirada na loja",
+        address:
+          manualOrderForm.deliveryType === "entrega"
+            ? manualOrderForm.address
+            : "Retirada na loja",
         deliveryDate: formattedDate,
         total: total,
         status: manualOrderForm.status,
@@ -389,17 +411,21 @@ export default function App() {
       await runTransaction(db, async (transaction) => {
         const contadorDoc = await transaction.get(contadorRef);
         let proximoNumero = 0;
-        
+
         if (contadorDoc.exists()) {
           const dados = contadorDoc.data();
           proximoNumero = (dados?.ultimoNumero ?? -1) + 1;
         }
 
-        transaction.set(contadorRef, { ultimoNumero: proximoNumero }, { merge: true });
+        transaction.set(
+          contadorRef,
+          { ultimoNumero: proximoNumero },
+          { merge: true },
+        );
 
         transaction.set(novoPedidoRef, {
           ...orderData,
-          numeroPedido: proximoNumero
+          numeroPedido: proximoNumero,
         });
       });
 
@@ -418,7 +444,7 @@ export default function App() {
   // ===============================================
   const formatMoney = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    
+
   const formatDate = (timestamp: number) => {
     const d = new Date(timestamp);
     return (
@@ -593,17 +619,32 @@ export default function App() {
 
       {/* MENU INFERIOR MOBILE */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-[#2A1610] text-white flex justify-around p-3 z-50 border-t border-[#B58E38]/20">
-        <button onClick={() => setView("SALES")} className={`flex flex-col items-center gap-1 ${view === "SALES" || view === "ORDER_FORM" ? "text-[#B58E38]" : "text-white/50"}`}>
+        <button
+          onClick={() => setView("SALES")}
+          className={`flex flex-col items-center gap-1 ${view === "SALES" || view === "ORDER_FORM" ? "text-[#B58E38]" : "text-white/50"}`}
+        >
           <ShoppingBag size={20} />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Pedidos</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">
+            Pedidos
+          </span>
         </button>
-        <button onClick={() => setView("FINANCE")} className={`flex flex-col items-center gap-1 ${view === "FINANCE" ? "text-[#B58E38]" : "text-white/50"}`}>
+        <button
+          onClick={() => setView("FINANCE")}
+          className={`flex flex-col items-center gap-1 ${view === "FINANCE" ? "text-[#B58E38]" : "text-white/50"}`}
+        >
           <Wallet size={20} />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Finanças</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">
+            Finanças
+          </span>
         </button>
-        <button onClick={() => setView("PRODUCTS")} className={`flex flex-col items-center gap-1 ${view === "PRODUCTS" || view === "PROD_FORM" ? "text-[#B58E38]" : "text-white/50"}`}>
+        <button
+          onClick={() => setView("PRODUCTS")}
+          className={`flex flex-col items-center gap-1 ${view === "PRODUCTS" || view === "PROD_FORM" ? "text-[#B58E38]" : "text-white/50"}`}
+        >
           <Package size={20} />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Catálogo</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">
+            Catálogo
+          </span>
         </button>
       </div>
 
@@ -616,7 +657,6 @@ export default function App() {
         )}
 
         <div className="p-4 md:p-8 max-w-6xl mx-auto min-h-full">
-          
           {/* VIEW: FINANCEIRO */}
           {view === "FINANCE" && (
             <div className="animate-enter pb-10">
@@ -722,7 +762,8 @@ export default function App() {
                             </td>
                           </tr>
                         ))}
-                      {orders.filter((o) => o.status === "Concluído").length === 0 && (
+                      {orders.filter((o) => o.status === "Concluído").length ===
+                        0 && (
                         <tr>
                           <td
                             colSpan={3}
@@ -752,11 +793,12 @@ export default function App() {
                       Acompanhe novos pedidos em tempo real.
                     </p>
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 shadow-sm animate-pulse">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> AO VIVO
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>{" "}
+                      AO VIVO
                     </div>
                   </div>
                 </div>
-                
+
                 <button
                   onClick={() => {
                     setManualOrderForm({
@@ -791,10 +833,21 @@ export default function App() {
                       >
                         <div className="flex items-center gap-4 text-left w-full">
                           <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center font-bold text-[#B58E38] shadow-sm border border-[#B58E38]/20 shrink-0">
-                            #{o.numeroPedido !== undefined ? o.numeroPedido : "-"}
+                            #
+                            {o.numeroPedido !== undefined
+                              ? o.numeroPedido
+                              : "-"}
                           </div>
                           <div>
-                            <p className={`text-base md:text-lg font-bold font-serif ${isOpen ? "text-[#B58E38]" : "text-[#2A1610]"}`}>
+                            <p
+                              className={`text-base md:text-lg font-bold font-serif flex items-center gap-2 flex-wrap ${isOpen ? "text-[#B58E38]" : "text-[#2A1610]"}`}
+                            >
+                              <span className="bg-[#B58E38]/10 text-[#B58E38] border border-[#B58E38]/20 text-[10px] md:text-xs px-2 py-0.5 rounded-md font-sans shrink-0">
+                                Pedido #
+                                {o.numeroPedido !== undefined
+                                  ? o.numeroPedido
+                                  : "-"}
+                              </span>
                               {o.customerName}
                             </p>
                             {o.customerPhone && (
@@ -853,6 +906,27 @@ export default function App() {
                                 <p className="font-bold text-[#2A1610] uppercase text-xs md:text-sm">
                                   {o.paymentMethod || "PIX"}
                                 </p>
+
+                                {/* CAIXA DE AVISO DE TROCO CONDICIONAL */}
+                                {o.paymentMethod === "Dinheiro" &&
+                                  o.needChange && (
+                                    <div className="mt-3 p-3 bg-orange-100 border border-orange-200 rounded-xl">
+                                      <p className="text-orange-800 text-[10px] md:text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                        <AlertCircle size={14} /> Levar Troco
+                                      </p>
+                                      <div className="text-orange-900 text-xs md:text-sm leading-relaxed">
+                                        Troco para:{" "}
+                                        <strong>
+                                          {formatMoney(o.changeFor || 0)}
+                                        </strong>
+                                        <br />
+                                        Devolver ao cliente:{" "}
+                                        <strong className="text-base text-orange-700">
+                                          {formatMoney(o.changeAmount || 0)}
+                                        </strong>
+                                      </div>
+                                    </div>
+                                  )}
                               </div>
                             </div>
                             <div>
@@ -861,13 +935,17 @@ export default function App() {
                               </h4>
                               <div className="flex gap-2">
                                 <button
-                                  onClick={() => handleUpdateOrderStatus(o.id, "Concluído")}
+                                  onClick={() =>
+                                    handleUpdateOrderStatus(o.id, "Concluído")
+                                  }
                                   className="flex-1 bg-green-100 hover:bg-green-200 text-green-700 py-2.5 rounded-xl text-xs md:text-sm font-bold transition-colors flex items-center justify-center gap-1.5"
                                 >
                                   <CheckCircle2 size={14} /> Concluir
                                 </button>
                                 <button
-                                  onClick={() => handleUpdateOrderStatus(o.id, "Cancelado")}
+                                  onClick={() =>
+                                    handleUpdateOrderStatus(o.id, "Cancelado")
+                                  }
                                   className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-2.5 rounded-xl text-xs md:text-sm font-bold transition-colors flex items-center justify-center gap-1.5"
                                 >
                                   <XCircle size={14} /> Cancelar
@@ -898,7 +976,9 @@ export default function App() {
                                         {item.name}
                                       </td>
                                       <td className="p-2 md:p-3 text-right font-bold text-[#2A1610]/60 whitespace-nowrap">
-                                        {formatMoney(item.price * item.quantity)}
+                                        {formatMoney(
+                                          item.price * item.quantity,
+                                        )}
                                       </td>
                                     </tr>
                                   ))}
@@ -929,20 +1009,25 @@ export default function App() {
               >
                 <X size={18} /> Voltar aos Pedidos
               </button>
-              
+
               <div className="bg-white rounded-3xl shadow-xl border border-[#B58E38]/20 overflow-hidden">
                 <div className="bg-[#2A1610] p-6 md:p-8 text-white relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-[#B58E38] opacity-20 rounded-bl-full pointer-events-none" />
                   <h2 className="font-serif italic text-2xl md:text-3xl relative z-10 flex items-center gap-3">
-                    <PlusCircle className="text-[#B58E38]" /> Lançar Pedido Manual
+                    <PlusCircle className="text-[#B58E38]" /> Lançar Pedido
+                    Manual
                   </h2>
                   <p className="text-white/60 text-xs md:text-sm mt-2 max-w-md relative z-10">
-                    Registre pedidos antigos ou vendas locais para manter o fluxo de caixa perfeito. O bot do WhatsApp não enviará mensagem para estes lançamentos.
+                    Registre pedidos antigos ou vendas locais para manter o
+                    fluxo de caixa perfeito. O bot do WhatsApp não enviará
+                    mensagem para estes lançamentos.
                   </p>
                 </div>
 
-                <form onSubmit={handleSaveManualOrder} className="p-4 md:p-8 space-y-6 md:space-y-8">
-                  
+                <form
+                  onSubmit={handleSaveManualOrder}
+                  className="p-4 md:p-8 space-y-6 md:space-y-8"
+                >
                   {/* SEÇÃO 1: CLIENTE */}
                   <div className="bg-[#F5F2EB]/50 p-4 md:p-6 rounded-2xl border border-[#B58E38]/10 space-y-4">
                     <h3 className="text-sm font-bold text-[#2A1610] uppercase tracking-widest border-b border-[#B58E38]/20 pb-2 mb-4">
@@ -957,7 +1042,12 @@ export default function App() {
                           required
                           className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                           value={manualOrderForm.customerName}
-                          onChange={(e) => setManualOrderForm({ ...manualOrderForm, customerName: e.target.value })}
+                          onChange={(e) =>
+                            setManualOrderForm({
+                              ...manualOrderForm,
+                              customerName: e.target.value,
+                            })
+                          }
                         />
                       </div>
                       <div>
@@ -969,7 +1059,12 @@ export default function App() {
                           className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                           placeholder="Apenas números"
                           value={manualOrderForm.customerPhone}
-                          onChange={(e) => setManualOrderForm({ ...manualOrderForm, customerPhone: e.target.value.replace(/\D/g, "") })}
+                          onChange={(e) =>
+                            setManualOrderForm({
+                              ...manualOrderForm,
+                              customerPhone: e.target.value.replace(/\D/g, ""),
+                            })
+                          }
                         />
                       </div>
                     </div>
@@ -990,7 +1085,12 @@ export default function App() {
                           type="date"
                           className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                           value={manualOrderForm.deliveryDate}
-                          onChange={(e) => setManualOrderForm({ ...manualOrderForm, deliveryDate: e.target.value })}
+                          onChange={(e) =>
+                            setManualOrderForm({
+                              ...manualOrderForm,
+                              deliveryDate: e.target.value,
+                            })
+                          }
                         />
                       </div>
                       <div>
@@ -1000,9 +1100,16 @@ export default function App() {
                         <select
                           className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                           value={manualOrderForm.status}
-                          onChange={(e) => setManualOrderForm({ ...manualOrderForm, status: e.target.value as any })}
+                          onChange={(e) =>
+                            setManualOrderForm({
+                              ...manualOrderForm,
+                              status: e.target.value as any,
+                            })
+                          }
                         >
-                          <option value="Concluído">Concluído (Entrou no Caixa)</option>
+                          <option value="Concluído">
+                            Concluído (Entrou no Caixa)
+                          </option>
                           <option value="Pendente">Pendente (A Receber)</option>
                           <option value="Cancelado">Cancelado</option>
                         </select>
@@ -1014,15 +1121,22 @@ export default function App() {
                         <select
                           className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                           value={manualOrderForm.paymentMethod}
-                          onChange={(e) => setManualOrderForm({ ...manualOrderForm, paymentMethod: e.target.value })}
+                          onChange={(e) =>
+                            setManualOrderForm({
+                              ...manualOrderForm,
+                              paymentMethod: e.target.value,
+                            })
+                          }
                         >
                           <option value="PIX">PIX</option>
                           <option value="Dinheiro">Dinheiro</option>
-                          <option value="Cartão de Crédito/Débito">Cartão</option>
+                          <option value="Cartão de Crédito/Débito">
+                            Cartão
+                          </option>
                         </select>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                       <div>
                         <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
@@ -1031,10 +1145,19 @@ export default function App() {
                         <select
                           className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                           value={manualOrderForm.deliveryType}
-                          onChange={(e) => setManualOrderForm({ ...manualOrderForm, deliveryType: e.target.value as "entrega"|"retirada" })}
+                          onChange={(e) =>
+                            setManualOrderForm({
+                              ...manualOrderForm,
+                              deliveryType: e.target.value as
+                                | "entrega"
+                                | "retirada",
+                            })
+                          }
                         >
                           <option value="entrega">Entrega (Motoboy)</option>
-                          <option value="retirada">Retirada na Loja / Balcão</option>
+                          <option value="retirada">
+                            Retirada na Loja / Balcão
+                          </option>
                         </select>
                       </div>
                       {manualOrderForm.deliveryType === "entrega" && (
@@ -1047,7 +1170,12 @@ export default function App() {
                             placeholder="Rua, Número, Bairro..."
                             className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                             value={manualOrderForm.address}
-                            onChange={(e) => setManualOrderForm({ ...manualOrderForm, address: e.target.value })}
+                            onChange={(e) =>
+                              setManualOrderForm({
+                                ...manualOrderForm,
+                                address: e.target.value,
+                              })
+                            }
                           />
                         </div>
                       )}
@@ -1059,7 +1187,7 @@ export default function App() {
                     <h3 className="text-sm font-bold text-[#2A1610] uppercase tracking-widest border-b border-[#B58E38]/20 pb-2 mb-4">
                       3. Itens do Pedido *
                     </h3>
-                    
+
                     <div className="flex flex-col md:flex-row gap-2 items-end">
                       <div className="flex-1 w-full">
                         <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
@@ -1070,9 +1198,13 @@ export default function App() {
                           value={selectedProductId}
                           onChange={(e) => setSelectedProductId(e.target.value)}
                         >
-                          <option value="">Selecione um produto do catálogo...</option>
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>{p.name} - {formatMoney(p.price)}</option>
+                          <option value="">
+                            Selecione um produto do catálogo...
+                          </option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} - {formatMoney(p.price)}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -1085,7 +1217,9 @@ export default function App() {
                           min="1"
                           className="w-full px-4 py-3 bg-white border border-[#B58E38]/20 rounded-xl focus:border-[#B58E38] outline-none text-[#2A1610] transition-all text-sm"
                           value={selectedQuantity}
-                          onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
+                          onChange={(e) =>
+                            setSelectedQuantity(parseInt(e.target.value) || 1)
+                          }
                         />
                       </div>
                       <button
@@ -1112,13 +1246,21 @@ export default function App() {
                           <tbody className="divide-y divide-[#B58E38]/10">
                             {manualOrderForm.items.map((item) => (
                               <tr key={item.id}>
-                                <td className="px-4 py-3 font-bold text-[#2A1610]">{item.name}</td>
-                                <td className="px-4 py-3 text-center text-[#B58E38] font-bold">{item.quantity}x</td>
-                                <td className="px-4 py-3 text-right text-[#2A1610]/70 font-semibold">{formatMoney(item.price * item.quantity)}</td>
+                                <td className="px-4 py-3 font-bold text-[#2A1610]">
+                                  {item.name}
+                                </td>
+                                <td className="px-4 py-3 text-center text-[#B58E38] font-bold">
+                                  {item.quantity}x
+                                </td>
+                                <td className="px-4 py-3 text-right text-[#2A1610]/70 font-semibold">
+                                  {formatMoney(item.price * item.quantity)}
+                                </td>
                                 <td className="px-4 py-3 text-center">
                                   <button
                                     type="button"
-                                    onClick={() => handleRemoveManualItem(item.id)}
+                                    onClick={() =>
+                                      handleRemoveManualItem(item.id)
+                                    }
                                     className="text-red-400 hover:text-red-600 p-1"
                                   >
                                     <Trash2 size={16} />
@@ -1129,9 +1271,16 @@ export default function App() {
                           </tbody>
                         </table>
                         <div className="bg-[#2A1610] text-[#B58E38] p-4 flex justify-between items-center">
-                          <span className="uppercase text-xs font-bold tracking-widest text-white/70">Total do Pedido:</span>
+                          <span className="uppercase text-xs font-bold tracking-widest text-white/70">
+                            Total do Pedido:
+                          </span>
                           <span className="text-xl font-serif font-bold">
-                            {formatMoney(manualOrderForm.items.reduce((acc, i) => acc + (i.price * i.quantity), 0))}
+                            {formatMoney(
+                              manualOrderForm.items.reduce(
+                                (acc, i) => acc + i.price * i.quantity,
+                                0,
+                              ),
+                            )}
                           </span>
                         </div>
                       </div>
@@ -1192,13 +1341,17 @@ export default function App() {
                       <tr>
                         <th className="px-4 md:px-6 py-4 md:py-5">Produto</th>
                         <th className="px-4 md:px-6 py-4 md:py-5">Preço</th>
-                        <th className="px-4 md:px-6 py-4 md:py-5 text-right">Ações</th>
+                        <th className="px-4 md:px-6 py-4 md:py-5 text-right">
+                          Ações
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#B58E38]/10">
                       {products
                         .filter((p) =>
-                          p.name.toLowerCase().includes(searchTerm.toLowerCase()),
+                          p.name
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()),
                         )
                         .map((p) => (
                           <tr
@@ -1239,13 +1392,19 @@ export default function App() {
                                   onClick={() => handleEditProd(p)}
                                   className="p-1.5 md:p-2 text-[#2A1610]/50 hover:bg-[#F5F2EB] hover:text-[#B58E38] rounded-full transition-colors"
                                 >
-                                  <Edit size={16} className="md:w-[18px] md:h-[18px]" />
+                                  <Edit
+                                    size={16}
+                                    className="md:w-[18px] md:h-[18px]"
+                                  />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteProduct(p.id)}
                                   className="p-1.5 md:p-2 text-[#2A1610]/50 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"
                                 >
-                                  <Trash2 size={16} className="md:w-[18px] md:h-[18px]" />
+                                  <Trash2
+                                    size={16}
+                                    className="md:w-[18px] md:h-[18px]"
+                                  />
                                 </button>
                               </div>
                             </td>
@@ -1274,7 +1433,10 @@ export default function App() {
                     {editingId ? "Editar Doce" : "Novo Doce"}
                   </h2>
                 </div>
-                <form onSubmit={handleSaveProd} className="p-6 md:p-8 space-y-6">
+                <form
+                  onSubmit={handleSaveProd}
+                  className="p-6 md:p-8 space-y-6"
+                >
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-[#B58E38] mb-1.5 tracking-widest">
                       Nome do Produto
